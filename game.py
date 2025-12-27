@@ -73,7 +73,7 @@ laser_speed = .5  # How fast lasers fly up (bigger = faster!)
 # --- ANGRY ZELDAS ---
 # These are the bad guys! Green circles with angry faces!
 zeldas = []  # Empty list to hold our angry Zeldas - each is [x, y, x_direction]
-zelda_speed = .2  # How fast Zeldas fly down (bigger = faster!)
+zelda_speed = .01  # How fast Zeldas fly down (bigger = faster!)
 zelda_side_speed = .15  # How fast Zeldas move side to side!
 zelda_spawn_timer = 0  # Counts up until it's time to spawn a new Zelda
 zelda_spawn_rate = 2000  # How often a new Zelda appears (bigger = less often)
@@ -92,6 +92,11 @@ explosions = []  # Each explosion is [x, y, timer] - timer counts down then it d
 # --- SCORE AND LIVES ---
 score = 0  # Your score! Goes up when you destroy Zeldas!
 lives = 3  # You start with 3 lives! Don't let Zeldas hit you!
+level = 1  # What level are you on? Gets harder each level!
+
+# --- LEVEL COMPLETE! ---
+level_complete = False  # True when boss is defeated!
+level_complete_timer = 0  # Timer for showing "LEVEL COMPLETE!"
 
 # --- TEXT FOR SHOWING SCORE ---
 # This sets up the font so we can write words on screen!
@@ -115,6 +120,13 @@ boss_spawn_score = 500  # Boss appears when you reach this score!
 boss_defeated = False  # Did we beat the boss?
 boss_defeated_timer = 0  # For boss explosion animation
 
+# --- GAME STATE ---
+# This controls if we're on the title screen or playing!
+# "title" = show the cool opening screen
+# "playing" = the actual game!
+game_state = "title"
+title_timer = 0  # Timer for cool animations on title screen!
+
 # --- GAME OVER STUFF ---
 game_over = False  # When True, show the game over screen!
 game_over_timer = 0  # Counts up during game over for animations
@@ -134,17 +146,28 @@ while running:
         if event.type == SONG_END:
             play_random_song()  # Pick another random song!
 
+        # --- PRESS ENTER TO START! ---
+        # When on title screen, press ENTER to start playing!
+        if event.type == pygame.KEYDOWN and game_state == "title":
+            if event.key == pygame.K_RETURN:  # RETURN is the ENTER key!
+                game_state = "playing"  # Start the game!
+
         # --- SHOOTING LASERS ---
         # When SPACE bar is pressed, shoot a laser! (only if game is NOT over)
-        if event.type == pygame.KEYDOWN and not game_over:  # A key was just pressed
+        if event.type == pygame.KEYDOWN and not game_over and game_state == "playing":  # A key was just pressed
             if event.key == pygame.K_SPACE:  # Was it SPACE?
                 # Create a new laser at Thrawn's nose (top of the ship!)
                 new_laser = [thrawn_x, thrawn_y - 30]  # [x position, y position]
                 lasers.append(new_laser)  # Add it to our laser list!
 
+    # --- TITLE SCREEN ---
+    # If we're on the title screen, update the timer and skip game logic!
+    if game_state == "title":
+        title_timer = title_timer + 1
+
     # --- MOVE THRAWN WITH ARROW KEYS ---
-    # Only move if game is NOT over!
-    if not game_over:
+    # Only move if game is NOT over and we're playing!
+    if not game_over and game_state == "playing":
         # Check which keys are being pressed right now
         keys = pygame.key.get_pressed()
 
@@ -179,10 +202,10 @@ while running:
 
     # --- SPAWN ANGRY ZELDAS ---
     # The timer counts up, and when it's big enough, a new Zelda appears!
-    # (Don't spawn new ones if game is over!)
-    if not game_over:
+    # (Don't spawn new ones if game is over or on title screen!)
+    if not game_over and game_state == "playing":
         zelda_spawn_timer = zelda_spawn_timer + 1
-    if zelda_spawn_timer >= zelda_spawn_rate and not game_over:
+    if zelda_spawn_timer >= zelda_spawn_rate and not game_over and game_state == "playing":
         # Time to spawn a new angry Zelda!
         new_zelda_x = random.randint(30, 770)  # Random spot (not too close to edges)
         new_zelda_y = -30  # Start above the screen (so it flies in!)
@@ -212,10 +235,10 @@ while running:
 
     # --- ZELDAS THROW SWORDS! ---
     # Every so often, each Zelda on screen throws a sword at Thrawn!
-    # (Don't throw if game is over!)
-    if not game_over:
+    # (Don't throw if game is over or on title screen!)
+    if not game_over and game_state == "playing":
         sword_timer = sword_timer + 1
-    if sword_timer >= sword_rate and not game_over:
+    if sword_timer >= sword_rate and not game_over and game_state == "playing":
         # Time for Zeldas to throw swords!
         for zelda in zeldas:
             # Only shoot if Zelda is on screen (not above it)
@@ -239,7 +262,7 @@ while running:
 
     # --- STAR DESTROYER BOSS! ---
     # Spawn the boss when player reaches enough points!
-    if score >= boss_spawn_score and not boss_active and not boss_defeated and not game_over:
+    if score >= boss_spawn_score and not boss_active and not boss_defeated and not game_over and game_state == "playing":
         boss_active = True
         boss_x = 400
         boss_y = -150  # Start above screen
@@ -284,11 +307,42 @@ while running:
     # --- BOSS DEFEATED ANIMATION ---
     if boss_defeated:
         boss_defeated_timer = boss_defeated_timer + 1
-        if boss_defeated_timer > 2000:
-            # Reset for next boss (spawn at higher score next time)
+
+    # --- LEVEL COMPLETE! ---
+    # After beating the boss, show message then go to next level!
+    if level_complete:
+        level_complete_timer = level_complete_timer + 1
+
+        # After 3 seconds (3000 ticks), go to next level!
+        if level_complete_timer > 3000:
+            # NEXT LEVEL!
+            level = level + 1
+            level_complete = False
+            level_complete_timer = 0
             boss_defeated = False
             boss_defeated_timer = 0
-            boss_spawn_score = boss_spawn_score + 1000  # Next boss at 1000 more points!
+
+            # Reset Thrawn to starting position
+            thrawn_x = 400
+            thrawn_y = 500
+
+            # Clear any remaining stuff
+            lasers = []
+            zeldas = []
+            swords = []
+            boss_lasers = []
+            explosions = []
+
+            # Boss spawns immediately on next level!
+            boss_spawn_score = 0  # Boss comes right away!
+            boss_active = False
+
+            # Make the game HARDER each level!
+            # Faster enemies, more swords, tougher boss!
+            zelda_speed = zelda_speed + 0.005  # Zeldas fly faster!
+            zelda_spawn_rate = max(500, zelda_spawn_rate - 200)  # More Zeldas spawn!
+            sword_rate = max(500, sword_rate - 100)  # More swords thrown!
+            boss_max_health = boss_max_health + 5  # Boss has more health!
 
 
     # --- BOOM! COLLISION DETECTION ---
@@ -341,6 +395,9 @@ while running:
                     boss_active = False
                     boss_defeated = True
                     boss_defeated_timer = 0
+                    # LEVEL COMPLETE! Beat the boss!
+                    level_complete = True
+                    level_complete_timer = 0
                     # HUGE score bonus for defeating the boss!
                     score = score + 1000
                     # Create massive explosion!
@@ -348,6 +405,10 @@ while running:
                         ex = boss_x + random.randint(-100, 100)
                         ey = boss_y + random.randint(-50, 50)
                         explosions.append([ex, ey, 600 + random.randint(0, 300)])
+                    # Clear all enemies - level is done!
+                    zeldas = []
+                    swords = []
+                    boss_lasers = []
 
     # --- BOSS LASERS HIT THRAWN? ---
     # Check if boss's green lasers hit the player!
@@ -423,12 +484,52 @@ while running:
     # Update game over animation
     if game_over:
         game_over_timer = game_over_timer + 1
-        # After showing explosions for a while, allow quitting
+        # After showing explosions for a while, allow going back to lobby
         if game_over_timer > 5000:
-            # Press any key to quit after game over
+            # Press any key to go back to lobby!
             keys = pygame.key.get_pressed()
             if any(keys):
-                running = False
+                # RESET EVERYTHING and go back to title screen!
+                game_state = "title"
+                title_timer = 0
+                game_over = False
+                game_over_timer = 0
+                game_over_explosions = []
+
+                # Reset player stats
+                score = 0
+                lives = 3
+                level = 1
+
+                # Reset Thrawn position
+                thrawn_x = 400
+                thrawn_y = 500
+
+                # Clear all enemies and projectiles
+                lasers = []
+                zeldas = []
+                swords = []
+                boss_lasers = []
+                explosions = []
+
+                # Reset boss stuff
+                boss_active = False
+                boss_x = 400
+                boss_y = -150
+                boss_health = 20
+                boss_max_health = 20
+                boss_spawn_score = 500
+                boss_defeated = False
+                boss_defeated_timer = 0
+
+                # Reset difficulty back to normal
+                zelda_speed = 0.01
+                zelda_spawn_rate = 2000
+                sword_rate = 1500
+
+                # Reset level complete
+                level_complete = False
+                level_complete_timer = 0
 
     # Fill the window with BLACK (like space!)
     window.fill((0, 0, 0))
@@ -438,6 +539,119 @@ while running:
     for star in stars:
         pygame.draw.circle(window, (255, 255, 255), star, 2)
         # (255, 255, 255) = WHITE, star = where to draw, 2 = tiny size
+
+    # --- DRAW THE TITLE SCREEN ---
+    # Show the epic opening screen before the game starts!
+    if game_state == "title":
+        # --- STAR DESTROYER in the background! ---
+        # It floats at the top, looking menacing!
+        title_boss_x = 400
+        title_boss_y = 120 + math.sin(title_timer / 500) * 10  # Gentle floating!
+
+        # Main body - big gray triangle (like a Star Destroyer!)
+        pygame.draw.polygon(window, (80, 80, 90), [
+            (title_boss_x, title_boss_y - 40),
+            (title_boss_x - 120, title_boss_y + 40),
+            (title_boss_x + 120, title_boss_y + 40)
+        ])
+        # Bridge tower
+        pygame.draw.polygon(window, (60, 60, 70), [
+            (title_boss_x - 20, title_boss_y + 10),
+            (title_boss_x + 20, title_boss_y + 10),
+            (title_boss_x + 15, title_boss_y - 10),
+            (title_boss_x - 15, title_boss_y - 10)
+        ])
+        # Bridge windows (glowing)
+        pygame.draw.rect(window, (255, 255, 100), (title_boss_x - 10, title_boss_y - 5, 20, 5))
+        # Engine glow
+        pygame.draw.circle(window, (100, 150, 255), (title_boss_x - 60, title_boss_y + 40), 12)
+        pygame.draw.circle(window, (100, 150, 255), (title_boss_x, title_boss_y + 40), 15)
+        pygame.draw.circle(window, (100, 150, 255), (title_boss_x + 60, title_boss_y + 40), 12)
+
+        # --- ANGRY ZELDAS on the sides! ---
+        # Left Zelda - bobbing up and down!
+        zelda1_x = 150
+        zelda1_y = 300 + math.sin(title_timer / 300) * 20
+
+        # Hair!
+        hair_color = (180, 130, 50)
+        pygame.draw.line(window, hair_color, (zelda1_x - 20, zelda1_y), (zelda1_x - 25, zelda1_y + 60), 4)
+        pygame.draw.line(window, hair_color, (zelda1_x, zelda1_y + 10), (zelda1_x, zelda1_y + 75), 4)
+        pygame.draw.line(window, hair_color, (zelda1_x + 20, zelda1_y), (zelda1_x + 25, zelda1_y + 60), 4)
+        # Green head
+        pygame.draw.circle(window, (0, 200, 0), (int(zelda1_x), int(zelda1_y)), 25)
+        # Crown!
+        pygame.draw.polygon(window, (255, 215, 0), [
+            (zelda1_x - 20, zelda1_y - 20), (zelda1_x - 15, zelda1_y - 35),
+            (zelda1_x - 7, zelda1_y - 25), (zelda1_x, zelda1_y - 40),
+            (zelda1_x + 7, zelda1_y - 25), (zelda1_x + 15, zelda1_y - 35),
+            (zelda1_x + 20, zelda1_y - 20)
+        ])
+        pygame.draw.circle(window, (255, 0, 0), (int(zelda1_x), int(zelda1_y - 30)), 4)
+        # Angry face!
+        pygame.draw.line(window, (0, 0, 0), (zelda1_x - 15, zelda1_y - 10), (zelda1_x - 5, zelda1_y - 5), 3)
+        pygame.draw.line(window, (0, 0, 0), (zelda1_x + 15, zelda1_y - 10), (zelda1_x + 5, zelda1_y - 5), 3)
+        pygame.draw.circle(window, (0, 0, 0), (int(zelda1_x - 10), int(zelda1_y)), 4)
+        pygame.draw.circle(window, (0, 0, 0), (int(zelda1_x + 10), int(zelda1_y)), 4)
+        pygame.draw.arc(window, (0, 0, 0), (zelda1_x - 10, zelda1_y + 5, 20, 10), 3.14, 6.28, 3)
+
+        # Right Zelda - bobbing opposite!
+        zelda2_x = 650
+        zelda2_y = 300 + math.cos(title_timer / 300) * 20
+
+        # Hair!
+        pygame.draw.line(window, hair_color, (zelda2_x - 20, zelda2_y), (zelda2_x - 25, zelda2_y + 60), 4)
+        pygame.draw.line(window, hair_color, (zelda2_x, zelda2_y + 10), (zelda2_x, zelda2_y + 75), 4)
+        pygame.draw.line(window, hair_color, (zelda2_x + 20, zelda2_y), (zelda2_x + 25, zelda2_y + 60), 4)
+        # Green head
+        pygame.draw.circle(window, (0, 200, 0), (int(zelda2_x), int(zelda2_y)), 25)
+        # Crown!
+        pygame.draw.polygon(window, (255, 215, 0), [
+            (zelda2_x - 20, zelda2_y - 20), (zelda2_x - 15, zelda2_y - 35),
+            (zelda2_x - 7, zelda2_y - 25), (zelda2_x, zelda2_y - 40),
+            (zelda2_x + 7, zelda2_y - 25), (zelda2_x + 15, zelda2_y - 35),
+            (zelda2_x + 20, zelda2_y - 20)
+        ])
+        pygame.draw.circle(window, (255, 0, 0), (int(zelda2_x), int(zelda2_y - 30)), 4)
+        # Angry face!
+        pygame.draw.line(window, (0, 0, 0), (zelda2_x - 15, zelda2_y - 10), (zelda2_x - 5, zelda2_y - 5), 3)
+        pygame.draw.line(window, (0, 0, 0), (zelda2_x + 15, zelda2_y - 10), (zelda2_x + 5, zelda2_y - 5), 3)
+        pygame.draw.circle(window, (0, 0, 0), (int(zelda2_x - 10), int(zelda2_y)), 4)
+        pygame.draw.circle(window, (0, 0, 0), (int(zelda2_x + 10), int(zelda2_y)), 4)
+        pygame.draw.arc(window, (0, 0, 0), (zelda2_x - 10, zelda2_y + 5, 20, 10), 3.14, 6.28, 3)
+
+        # --- THE GAME TITLE! ---
+        # "IN OUTSIDERELM" with a glowing effect!
+        # The glow pulses bigger and smaller!
+        glow_size = 3 + math.sin(title_timer / 200) * 2
+
+        # Draw glowing outline (draw title multiple times, slightly offset, in blue!)
+        title_text = big_font.render("IN OUTSIDERELM", True, (0, 100, 255))
+        for offset_x in range(-int(glow_size), int(glow_size) + 1):
+            for offset_y in range(-int(glow_size), int(glow_size) + 1):
+                glow_text = big_font.render("IN OUTSIDERELM", True, (0, 50, 150))
+                glow_rect = glow_text.get_rect(center=(400 + offset_x, 250 + offset_y))
+                window.blit(glow_text, glow_rect)
+
+        # Draw the main title in bright blue!
+        title_rect = title_text.get_rect(center=(400, 250))
+        window.blit(title_text, title_rect)
+
+        # --- CONTROLS INFO ---
+        controls1 = font.render("ARROW KEYS = Move", True, (200, 200, 200))
+        controls1_rect = controls1.get_rect(center=(400, 420))
+        window.blit(controls1, controls1_rect)
+
+        controls2 = font.render("SPACE = Shoot Lasers!", True, (255, 100, 100))
+        controls2_rect = controls2.get_rect(center=(400, 460))
+        window.blit(controls2, controls2_rect)
+
+        # --- PRESS ENTER TO START! ---
+        # This text blinks by changing visibility based on timer!
+        if (title_timer // 500) % 2 == 0:  # Blink every 500 ticks!
+            start_text = medium_font.render("PRESS ENTER TO START!", True, (255, 255, 0))
+            start_rect = start_text.get_rect(center=(400, 530))
+            window.blit(start_text, start_rect)
 
     # --- DRAW THE EXPLOSIONS ---
     # Big colorful BOOM when Zeldas get hit!
@@ -613,6 +827,34 @@ while running:
         pygame.draw.circle(window, (255, 0, 0), (thrawn_x - 8, thrawn_y), 5)  # Left eye
         pygame.draw.circle(window, (255, 0, 0), (thrawn_x + 8, thrawn_y), 5)  # Right eye
 
+    # --- DRAW LEVEL COMPLETE! ---
+    # When you beat the boss, show an awesome message!
+    if level_complete:
+        # Big glowing "LEVEL COMPLETE!" text!
+        glow = 3 + math.sin(level_complete_timer / 100) * 2
+
+        # Draw glow effect
+        for ox in range(-int(glow), int(glow) + 1):
+            for oy in range(-int(glow), int(glow) + 1):
+                glow_text = big_font.render("LEVEL COMPLETE!", True, (0, 100, 0))
+                glow_rect = glow_text.get_rect(center=(400 + ox, 250 + oy))
+                window.blit(glow_text, glow_rect)
+
+        # Main text in bright green!
+        complete_text = big_font.render("LEVEL COMPLETE!", True, (0, 255, 0))
+        complete_rect = complete_text.get_rect(center=(400, 250))
+        window.blit(complete_text, complete_rect)
+
+        # Show what level is next!
+        next_text = medium_font.render("Get ready for LEVEL " + str(level + 1) + "!", True, (255, 255, 0))
+        next_rect = next_text.get_rect(center=(400, 320))
+        window.blit(next_text, next_rect)
+
+        # Show score
+        score_msg = font.render("Score: " + str(score), True, (255, 255, 255))
+        score_rect = score_msg.get_rect(center=(400, 380))
+        window.blit(score_msg, score_rect)
+
     # --- DRAW GAME OVER FART CLOUDS ---
     # When the game is over, show STINKY fart clouds!
     if game_over:
@@ -680,18 +922,25 @@ while running:
 
         # Show "Press any key" after a bit
         if game_over_timer > 3000:
-            press_key_text = font.render("Press any key to exit", True, (150, 150, 150))
+            press_key_text = font.render("Press any key to return to lobby", True, (150, 150, 150))
             key_rect = press_key_text.get_rect(center=(400, 430))
             window.blit(press_key_text, key_rect)
 
     # --- DRAW SCORE AND LIVES ---
-    # Show the score in the top left!
-    score_text = font.render("SCORE: " + str(score), True, (255, 255, 255))
-    window.blit(score_text, (10, 10))  # Put it at top-left corner
+    # Only show score/lives when playing (not on title screen!)
+    if game_state == "playing":
+        # Show the score in the top left!
+        score_text = font.render("SCORE: " + str(score), True, (255, 255, 255))
+        window.blit(score_text, (10, 10))  # Put it at top-left corner
 
-    # Show lives in the top right!
-    lives_text = font.render("LIVES: " + str(lives), True, (255, 0, 0))
-    window.blit(lives_text, (680, 10))  # Put it at top-right corner
+        # Show current level in the middle!
+        level_text = font.render("LEVEL " + str(level), True, (0, 255, 255))
+        level_rect = level_text.get_rect(center=(400, 20))
+        window.blit(level_text, level_rect)
+
+        # Show lives in the top right!
+        lives_text = font.render("LIVES: " + str(lives), True, (255, 0, 0))
+        window.blit(lives_text, (680, 10))  # Put it at top-right corner
 
     # Show everything on screen
     pygame.display.flip()
