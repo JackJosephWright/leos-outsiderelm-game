@@ -9,6 +9,8 @@ import random
 import math
 # OS helps us find music files!
 import os
+# JSON helps us save our coins to a file!
+import json
 
 # Wake up Pygame! (like turning on a game console)
 pygame.init()
@@ -28,17 +30,57 @@ if os.path.exists(music_folder):
             songs.append(os.path.join(music_folder, file))
     print("Found " + str(len(songs)) + " songs!")
 
-# Function to play a random song!
+# Shuffle the songs so they play in random order without repeating!
+random.shuffle(songs)
+current_song_index = 0  # Which song we're on in the shuffled list
+
+# Function to play the next song (without repeating!)
 def play_random_song():
+    global current_song_index
     if len(songs) > 0:
-        song = random.choice(songs)  # Pick a random song!
+        # Get the next song in our shuffled list
+        song = songs[current_song_index]
         pygame.mixer.music.load(song)
         pygame.mixer.music.set_volume(0.5)  # 50% volume
         pygame.mixer.music.play()  # Play once (we'll pick a new one when it ends!)
         print("Now playing: " + song)
 
+        # Move to next song, and reshuffle when we've played them all!
+        current_song_index = current_song_index + 1
+        if current_song_index >= len(songs):
+            current_song_index = 0
+            random.shuffle(songs)  # Reshuffle for next round!
+            print("Reshuffled the playlist!")
+
 # Start playing a random song!
 play_random_song()
+
+# --- COINS (SAVED POINTS!) ---
+# This is your wallet! Coins save even when you close the game!
+save_file = "save_data.json"  # The file where we save your coins!
+
+# Function to load coins from the save file!
+def load_coins():
+    # Try to open the save file and read the coins
+    if os.path.exists(save_file):
+        try:
+            with open(save_file, "r") as f:
+                data = json.load(f)
+                return data.get("coins", 0)  # Get coins, or 0 if not found
+        except:
+            return 0  # If something goes wrong, start with 0
+    return 0  # No save file? Start with 0 coins!
+
+# Function to save coins to the save file!
+def save_coins(coins_to_save):
+    data = {"coins": coins_to_save}
+    with open(save_file, "w") as f:
+        json.dump(data, f)
+    print("Saved " + str(coins_to_save) + " coins!")
+
+# Load our coins when the game starts!
+coins = load_coins()
+print("You have " + str(coins) + " coins!")
 
 # Set up an event for when the music ends so we can play another!
 SONG_END = pygame.USEREVENT + 1
@@ -46,29 +88,59 @@ pygame.mixer.music.set_endevent(SONG_END)
 
 # --- MAKE THE WINDOW ---
 # These numbers are how big the window is (wide, tall)
-window = pygame.display.set_mode((800, 600))
+# BIGGER window for exploring space!
+SCREEN_WIDTH = 1200
+SCREEN_HEIGHT = 800
+window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Give our window a name at the top!
 pygame.display.set_caption("In Outsiderelm")
 
 # --- THRAWN THE HERO ---
 # Thrawn starts at the bottom center of the screen
-thrawn_x = 400  # Middle of screen (800 / 2)
-thrawn_y = 500  # Near the bottom
+thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
+thrawn_y = SCREEN_HEIGHT - 100  # Near the bottom
 thrawn_speed = .1  # How fast Thrawn moves (bigger = faster!)
 
 # --- MAKE THE STARS ---
-# We make 50 stars at random spots in our space!
-stars = []  # Empty list to hold our stars
-for i in range(50):  # Do this 50 times
-    x = random.randint(0, 800)  # Random spot left-to-right
-    y = random.randint(0, 600)  # Random spot top-to-bottom
-    stars.append((x, y))  # Add this star to our list!
+# Lots of stars for a big space feeling!
+# We have 3 layers: far stars (slow), medium stars, close stars (fast)
+far_stars = []  # Tiny distant stars (move slow)
+for i in range(80):
+    x = random.randint(0, SCREEN_WIDTH)
+    y = random.randint(0, SCREEN_HEIGHT)
+    far_stars.append([x, y])
+
+medium_stars = []  # Medium stars
+for i in range(50):
+    x = random.randint(0, SCREEN_WIDTH)
+    y = random.randint(0, SCREEN_HEIGHT)
+    medium_stars.append([x, y])
+
+close_stars = []  # Big close stars (move fast) - feels like speed!
+for i in range(20):
+    x = random.randint(0, SCREEN_WIDTH)
+    y = random.randint(0, SCREEN_HEIGHT)
+    close_stars.append([x, y])
+
+# Keep the old stars list for compatibility
+stars = far_stars
 
 # --- LASERS ---
 # This list holds all the lasers Thrawn shoots!
 lasers = []  # Empty list - lasers get added when SPACE is pressed
 laser_speed = .5  # How fast lasers fly up (bigger = faster!)
+shoot_cooldown = 0  # Timer to prevent shooting too fast
+normal_shoot_rate = 300  # Normal time between shots
+fast_shoot_rate = 80  # Super fast shooting!
+
+# --- BIG LASER (MEGA BEAM!) ---
+# The ultimate weapon! A huge beam that destroys everything!
+big_laser_active = False  # Is the big laser firing?
+big_laser_timer = 0  # How long the beam lasts
+big_laser_max_time = 500  # How long the beam stays on screen
+big_laser_cooldown = 0  # Time until you can fire again
+big_laser_cooldown_time = 2000  # Cooldown between big laser shots
 
 # --- ANGRY ZELDAS ---
 # These are the bad guys! Green circles with angry faces!
@@ -104,10 +176,13 @@ font = pygame.font.Font(None, 36)  # 36 = size of the text
 big_font = pygame.font.Font(None, 100)  # BIG font for GAME OVER!
 medium_font = pygame.font.Font(None, 50)  # Medium font for final score
 
-# --- STAR DESTROYER BOSS ---
-# The big bad boss! Appears after you get enough points!
+# --- BOSS SYSTEM ---
+# Different bosses appear on different levels!
+# Level 1: Star Destroyer, Level 2: Mega Zelda Queen,
+# Level 3: Giant Robot, Level 4: Space Dragon, Level 5+: Super Dancing 67!
+boss_type = "star_destroyer"  # Which boss is active?
 boss_active = False  # Is the boss on screen?
-boss_x = 400  # Boss x position (center of screen)
+boss_x = SCREEN_WIDTH // 2  # Boss x position (center of screen)
 boss_y = -150  # Boss y position (starts above screen)
 boss_health = 20  # How many hits to defeat the boss!
 boss_max_health = 20  # For the health bar
@@ -120,12 +195,50 @@ boss_spawn_score = 500  # Boss appears when you reach this score!
 boss_defeated = False  # Did we beat the boss?
 boss_defeated_timer = 0  # For boss explosion animation
 
+# Special boss variables!
+robot_fist_x = 0  # For Giant Robot's rocket fist!
+robot_fist_y = -100
+robot_fist_active = False
+dragon_fire_timer = 0  # For Space Dragon's fire breath!
+dance_angle = 0  # For Super Dancing 67's dance moves!
+
 # --- GAME STATE ---
-# This controls if we're on the title screen or playing!
+# This controls if we're on the title screen, shop, or playing!
 # "title" = show the cool opening screen
+# "shop" = the AWESOME shop where you buy power-ups!
 # "playing" = the actual game!
 game_state = "title"
 title_timer = 0  # Timer for cool animations on title screen!
+
+# --- THE SHOP! ---
+# These are the things you can buy!
+shop_selection = 0  # Which item you're looking at (0, 1, 2, etc.)
+
+# Power-up prices (how many coins each one costs!)
+SPEED_BOOST_PRICE = 200      # Makes Thrawn go faster!
+SHIELD_PRICE = 300           # Protects you from 1 hit!
+FAST_SHOOTING_PRICE = 250    # Shoot lasers super fast!
+BIG_LASER_PRICE = 500        # MEGA destruction beam!
+WINGMAN_PRICE = 400          # A buddy ship that fights with you!
+
+# What power-ups does the player have for this game?
+has_speed_boost = False      # Did you buy speed boost?
+has_shield = False           # Do you have a shield?
+shield_hits = 0              # How many hits can your shield take?
+has_fast_shooting = False    # Did you buy fast shooting?
+has_big_laser = False        # Did you buy the BIG LASER?
+wingmen = []                 # Your fleet of wingman ships! Each is [x, y]
+wingmen_count = 0            # How many wingmen you bought
+
+# Shop items list (for drawing the shop)
+shop_items = [
+    {"name": "SPEED BOOST", "price": SPEED_BOOST_PRICE, "desc": "Thrawn goes ZOOM!", "color": (0, 255, 255)},
+    {"name": "SHIELD", "price": SHIELD_PRICE, "desc": "Bubble protects you!", "color": (100, 200, 255)},
+    {"name": "FAST SHOOTING", "price": FAST_SHOOTING_PRICE, "desc": "Pew pew pew pew!", "color": (255, 100, 100)},
+    {"name": "BIG LASER", "price": BIG_LASER_PRICE, "desc": "MEGA BEAM!", "color": (255, 255, 0)},
+    {"name": "WINGMAN", "price": WINGMAN_PRICE, "desc": "Buddy ship fights with you!", "color": (0, 255, 100)},
+    {"name": "START GAME!", "price": 0, "desc": "Let's GO!", "color": (255, 255, 255)},
+]
 
 # --- GAME OVER STUFF ---
 game_over = False  # When True, show the game over screen!
@@ -146,24 +259,159 @@ while running:
         if event.type == SONG_END:
             play_random_song()  # Pick another random song!
 
-        # --- PRESS ENTER TO START! ---
-        # When on title screen, press ENTER to start playing!
+        # --- PRESS ENTER TO GO TO SHOP! ---
+        # When on title screen, press ENTER to go to the SHOP!
         if event.type == pygame.KEYDOWN and game_state == "title":
             if event.key == pygame.K_RETURN:  # RETURN is the ENTER key!
-                game_state = "playing"  # Start the game!
+                game_state = "shop"  # Go to the shop first!
+                shop_selection = 0   # Start at the first item
+
+        # --- SHOP CONTROLS! ---
+        # In the shop, use UP/DOWN to pick items and ENTER to buy!
+        if event.type == pygame.KEYDOWN and game_state == "shop":
+            # Move UP in the shop menu
+            if event.key == pygame.K_UP:
+                shop_selection = shop_selection - 1
+                if shop_selection < 0:
+                    shop_selection = len(shop_items) - 1  # Wrap to bottom!
+
+            # Move DOWN in the shop menu
+            if event.key == pygame.K_DOWN:
+                shop_selection = shop_selection + 1
+                if shop_selection >= len(shop_items):
+                    shop_selection = 0  # Wrap to top!
+
+            # ENTER to buy the selected item!
+            if event.key == pygame.K_RETURN:
+                selected_item = shop_items[shop_selection]
+
+                # Is it the START GAME button?
+                if selected_item["name"] == "START GAME!":
+                    game_state = "playing"  # Let's GO!
+                    # Create wingmen based on how many you bought!
+                    wingmen = []
+                    for i in range(wingmen_count):
+                        # Position wingmen on alternating sides of Thrawn!
+                        if i % 2 == 0:
+                            wx = thrawn_x - 50 - (i // 2) * 40  # Left side
+                        else:
+                            wx = thrawn_x + 50 + (i // 2) * 40  # Right side
+                        wingmen.append([wx, thrawn_y])
+
+                # Try to buy SPEED BOOST!
+                elif selected_item["name"] == "SPEED BOOST":
+                    if coins >= SPEED_BOOST_PRICE and not has_speed_boost:
+                        coins = coins - SPEED_BOOST_PRICE
+                        has_speed_boost = True
+                        save_coins(coins)
+                        print("Bought SPEED BOOST!")
+
+                # Try to buy SHIELD!
+                elif selected_item["name"] == "SHIELD":
+                    if coins >= SHIELD_PRICE:
+                        coins = coins - SHIELD_PRICE
+                        has_shield = True
+                        shield_hits = shield_hits + 1  # Can buy multiple!
+                        save_coins(coins)
+                        print("Bought SHIELD! You have " + str(shield_hits) + " shield(s)!")
+
+                # Try to buy FAST SHOOTING!
+                elif selected_item["name"] == "FAST SHOOTING":
+                    if coins >= FAST_SHOOTING_PRICE and not has_fast_shooting:
+                        coins = coins - FAST_SHOOTING_PRICE
+                        has_fast_shooting = True
+                        save_coins(coins)
+                        print("Bought FAST SHOOTING!")
+
+                # Try to buy BIG LASER!
+                elif selected_item["name"] == "BIG LASER":
+                    if coins >= BIG_LASER_PRICE and not has_big_laser:
+                        coins = coins - BIG_LASER_PRICE
+                        has_big_laser = True
+                        save_coins(coins)
+                        print("Bought BIG LASER!")
+
+                # Try to buy a WINGMAN!
+                elif selected_item["name"] == "WINGMAN":
+                    if coins >= WINGMAN_PRICE:
+                        coins = coins - WINGMAN_PRICE
+                        wingmen_count = wingmen_count + 1
+                        save_coins(coins)
+                        print("Bought WINGMAN! You have " + str(wingmen_count) + " wingmen!")
 
         # --- SHOOTING LASERS ---
         # When SPACE bar is pressed, shoot a laser! (only if game is NOT over)
+        # Now uses a cooldown so you can't spam too fast (unless you have fast shooting!)
         if event.type == pygame.KEYDOWN and not game_over and game_state == "playing":  # A key was just pressed
             if event.key == pygame.K_SPACE:  # Was it SPACE?
-                # Create a new laser at Thrawn's nose (top of the ship!)
-                new_laser = [thrawn_x, thrawn_y - 30]  # [x position, y position]
-                lasers.append(new_laser)  # Add it to our laser list!
+                # Check if we can shoot (cooldown is done)
+                if shoot_cooldown <= 0:
+                    # Create a new laser at Thrawn's nose (top of the ship!)
+                    new_laser = [thrawn_x, thrawn_y - 30]  # [x position, y position]
+                    lasers.append(new_laser)  # Add it to our laser list!
+
+                    # WINGMEN SHOOT TOO! (when Thrawn shoots)
+                    for wingman in wingmen:
+                        wingman_laser = [wingman[0], wingman[1] - 20]
+                        lasers.append(wingman_laser)
+
+                    # Set the cooldown based on power-up!
+                    if has_fast_shooting:
+                        shoot_cooldown = fast_shoot_rate  # Super fast!
+                    else:
+                        shoot_cooldown = normal_shoot_rate  # Normal speed
+
+            # --- BIG LASER! ---
+            # Press B to fire the MEGA BEAM! (if you have it)
+            if event.key == pygame.K_b:
+                if has_big_laser and big_laser_cooldown <= 0 and not big_laser_active:
+                    big_laser_active = True
+                    big_laser_timer = big_laser_max_time
+                    print("MEGA BEAM ACTIVATED!")
 
     # --- TITLE SCREEN ---
     # If we're on the title screen, update the timer and skip game logic!
     if game_state == "title":
         title_timer = title_timer + 1
+
+    # --- UPDATE SHOOTING COOLDOWN ---
+    # Count down the cooldown timer so you can shoot again!
+    if shoot_cooldown > 0:
+        shoot_cooldown = shoot_cooldown - 1
+
+    # --- UPDATE BIG LASER ---
+    # If the big laser is active, count down its timer and destroy enemies!
+    if big_laser_active:
+        big_laser_timer = big_laser_timer - 1
+        if big_laser_timer <= 0:
+            big_laser_active = False
+            big_laser_cooldown = big_laser_cooldown_time  # Start cooldown!
+
+        # BIG LASER destroys ALL Zeldas in its path!
+        # The beam is a wide column from Thrawn going up!
+        zeldas_to_destroy = []
+        for zelda in zeldas:
+            # Is the Zelda in the laser beam? (within 50 pixels of Thrawn's x)
+            if abs(zelda[0] - thrawn_x) < 50 and zelda[1] < thrawn_y:
+                zeldas_to_destroy.append(zelda)
+                explosions.append([zelda[0], zelda[1], 300])
+                score = score + 100  # Still get points!
+
+        for zelda in zeldas_to_destroy:
+            if zelda in zeldas:
+                zeldas.remove(zelda)
+
+        # Big laser also damages the BOSS!
+        if boss_active and not boss_defeated:
+            if abs(boss_x - thrawn_x) < 100 and boss_y > 0:
+                # Constant damage while beam is on boss!
+                if big_laser_timer % 50 == 0:  # Damage every 50 ticks
+                    boss_health = boss_health - 1
+                    explosions.append([boss_x + random.randint(-50, 50), boss_y + random.randint(-20, 20), 200])
+
+    # Count down big laser cooldown
+    if big_laser_cooldown > 0:
+        big_laser_cooldown = big_laser_cooldown - 1
 
     # --- MOVE THRAWN WITH ARROW KEYS ---
     # Only move if game is NOT over and we're playing!
@@ -171,21 +419,42 @@ while running:
         # Check which keys are being pressed right now
         keys = pygame.key.get_pressed()
 
+        # How fast should Thrawn move? ZOOM if speed boost!
+        current_speed = thrawn_speed
+        if has_speed_boost:
+            current_speed = thrawn_speed * 3  # TRIPLE SPEED! ZOOM!
+
         # Move left (but don't go off screen!)
         if keys[pygame.K_LEFT] and thrawn_x > 25:
-            thrawn_x = thrawn_x - thrawn_speed
+            thrawn_x = thrawn_x - current_speed
 
         # Move right (but don't go off screen!)
-        if keys[pygame.K_RIGHT] and thrawn_x < 775:
-            thrawn_x = thrawn_x + thrawn_speed
+        if keys[pygame.K_RIGHT] and thrawn_x < SCREEN_WIDTH - 25:
+            thrawn_x = thrawn_x + current_speed
 
         # Move up (but don't go off screen!)
         if keys[pygame.K_UP] and thrawn_y > 30:
-            thrawn_y = thrawn_y - thrawn_speed
+            thrawn_y = thrawn_y - current_speed
 
         # Move down (but don't go off screen!)
-        if keys[pygame.K_DOWN] and thrawn_y < 580:
-            thrawn_y = thrawn_y + thrawn_speed
+        if keys[pygame.K_DOWN] and thrawn_y < SCREEN_HEIGHT - 20:
+            thrawn_y = thrawn_y + current_speed
+
+    # --- UPDATE WINGMEN ---
+    # Wingmen fly in formation around Thrawn!
+    if game_state == "playing" and not game_over:
+        for i in range(len(wingmen)):
+            wingman = wingmen[i]
+            # Calculate target position (formation around Thrawn)
+            if i % 2 == 0:
+                target_x = thrawn_x - 50 - (i // 2) * 40  # Left side
+            else:
+                target_x = thrawn_x + 50 + (i // 2) * 40  # Right side
+            target_y = thrawn_y + 20  # Slightly behind Thrawn
+
+            # Smoothly move toward target position
+            wingman[0] = wingman[0] + (target_x - wingman[0]) * 0.01
+            wingman[1] = wingman[1] + (target_y - wingman[1]) * 0.01
 
     # --- MOVE THE LASERS ---
     # Each laser flies UP the screen!
@@ -207,7 +476,7 @@ while running:
         zelda_spawn_timer = zelda_spawn_timer + 1
     if zelda_spawn_timer >= zelda_spawn_rate and not game_over and game_state == "playing":
         # Time to spawn a new angry Zelda!
-        new_zelda_x = random.randint(30, 770)  # Random spot (not too close to edges)
+        new_zelda_x = random.randint(30, SCREEN_WIDTH - 30)  # Random spot (not too close to edges)
         new_zelda_y = -30  # Start above the screen (so it flies in!)
         # Random direction: -1 = moving left, 1 = moving right
         new_zelda_dir = random.choice([-1, 1])
@@ -223,13 +492,13 @@ while running:
         # Bounce off the walls! If Zelda hits edge, reverse direction!
         if zelda[0] <= 30:  # Hit left wall?
             zelda[2] = 1    # Now move right!
-        if zelda[0] >= 770:  # Hit right wall?
+        if zelda[0] >= SCREEN_WIDTH - 30:  # Hit right wall?
             zelda[2] = -1   # Now move left!
 
     # Remove Zeldas that flew off the bottom of the screen
     zeldas_to_keep = []
     for zelda in zeldas:
-        if zelda[1] < 650:  # If Zelda is still on screen
+        if zelda[1] < SCREEN_HEIGHT + 50:  # If Zelda is still on screen
             zeldas_to_keep.append(zelda)
     zeldas = zeldas_to_keep
 
@@ -256,7 +525,7 @@ while running:
     # Remove swords that flew off the bottom of the screen
     swords_to_keep = []
     for sword in swords:
-        if sword[1] < 650:
+        if sword[1] < SCREEN_HEIGHT + 50:
             swords_to_keep.append(sword)
     swords = swords_to_keep
 
@@ -264,7 +533,7 @@ while running:
     # Spawn the boss when player reaches enough points!
     if score >= boss_spawn_score and not boss_active and not boss_defeated and not game_over and game_state == "playing":
         boss_active = True
-        boss_x = 400
+        boss_x = SCREEN_WIDTH // 2
         boss_y = -150  # Start above screen
         boss_health = boss_max_health
 
@@ -274,22 +543,84 @@ while running:
         if boss_y < 80:
             boss_y = boss_y + 0.05
         else:
-            # Move side to side once in position
-            boss_x = boss_x + (boss_speed * boss_direction)
+            # --- STAR DESTROYER MOVEMENT ---
+            if boss_type == "star_destroyer":
+                # Move side to side once in position
+                boss_x = boss_x + (boss_speed * boss_direction)
+                # Bounce off walls
+                if boss_x <= 150:
+                    boss_direction = 1
+                if boss_x >= SCREEN_WIDTH - 150:
+                    boss_direction = -1
 
-            # Bounce off walls
-            if boss_x <= 150:
-                boss_direction = 1
-            if boss_x >= 650:
-                boss_direction = -1
+            # --- MEGA ZELDA QUEEN MOVEMENT ---
+            elif boss_type == "zelda_queen":
+                # Bounces around crazily!
+                boss_x = boss_x + (boss_speed * 1.5 * boss_direction)
+                if boss_x <= 100:
+                    boss_direction = 1
+                if boss_x >= SCREEN_WIDTH - 100:
+                    boss_direction = -1
 
-        # Boss shoots green lasers at Thrawn!
+            # --- GIANT ROBOT MOVEMENT ---
+            elif boss_type == "giant_robot":
+                # Slow but menacing!
+                boss_x = boss_x + (boss_speed * 0.5 * boss_direction)
+                if boss_x <= 150:
+                    boss_direction = 1
+                if boss_x >= SCREEN_WIDTH - 150:
+                    boss_direction = -1
+                # Rocket fist attack!
+                if not robot_fist_active and random.randint(0, 1000) < 3:
+                    robot_fist_active = True
+                    robot_fist_x = boss_x
+                    robot_fist_y = boss_y + 50
+                if robot_fist_active:
+                    robot_fist_y = robot_fist_y + 0.3  # Fist flies down!
+                    if robot_fist_y > SCREEN_HEIGHT + 50:
+                        robot_fist_active = False
+                        robot_fist_y = -100
+
+            # --- SPACE DRAGON MOVEMENT ---
+            elif boss_type == "space_dragon":
+                # Swoops in circles!
+                dragon_fire_timer = dragon_fire_timer + 0.02
+                boss_x = SCREEN_WIDTH // 2 + math.sin(dragon_fire_timer) * 350
+                boss_y = 100 + math.cos(dragon_fire_timer * 0.5) * 50
+
+            # --- SUPER DANCING 67 MOVEMENT ---
+            elif boss_type == "dancing_67":
+                # Dances around the screen!
+                dance_angle = dance_angle + 0.03
+                boss_x = SCREEN_WIDTH // 2 + math.sin(dance_angle * 2) * 300
+                boss_y = 120 + math.sin(dance_angle * 3) * 40
+
+        # Boss shoots attacks at Thrawn!
         boss_shoot_timer = boss_shoot_timer + 1
         if boss_shoot_timer >= boss_shoot_rate and boss_y > 50:
-            # Shoot 3 lasers in a spread pattern!
-            boss_lasers.append([boss_x - 60, boss_y + 50, -0.2])  # Left laser (angled left)
-            boss_lasers.append([boss_x, boss_y + 60, 0])           # Middle laser (straight)
-            boss_lasers.append([boss_x + 60, boss_y + 50, 0.2])   # Right laser (angled right)
+            if boss_type == "star_destroyer":
+                # Shoot 3 lasers in a spread pattern!
+                boss_lasers.append([boss_x - 60, boss_y + 50, -0.2])
+                boss_lasers.append([boss_x, boss_y + 60, 0])
+                boss_lasers.append([boss_x + 60, boss_y + 50, 0.2])
+            elif boss_type == "zelda_queen":
+                # Throws MEGA swords!
+                for i in range(5):  # 5 swords at once!
+                    swords.append([boss_x - 80 + i * 40, boss_y + 60])
+            elif boss_type == "giant_robot":
+                # Laser eyes!
+                boss_lasers.append([boss_x - 30, boss_y + 20, -0.1])
+                boss_lasers.append([boss_x + 30, boss_y + 20, 0.1])
+            elif boss_type == "space_dragon":
+                # Fire breath! Many small fireballs!
+                for i in range(7):
+                    angle = -0.3 + i * 0.1
+                    boss_lasers.append([boss_x, boss_y + 40, angle])
+            elif boss_type == "dancing_67":
+                # Disco lasers in all directions!
+                for i in range(8):
+                    angle = -0.4 + i * 0.1
+                    boss_lasers.append([boss_x, boss_y + 30, angle])
             boss_shoot_timer = 0
 
     # Move boss lasers
@@ -300,7 +631,7 @@ while running:
     # Remove boss lasers that went off screen
     boss_lasers_to_keep = []
     for laser in boss_lasers:
-        if laser[1] < 650:
+        if laser[1] < SCREEN_HEIGHT + 50:
             boss_lasers_to_keep.append(laser)
     boss_lasers = boss_lasers_to_keep
 
@@ -323,8 +654,8 @@ while running:
             boss_defeated_timer = 0
 
             # Reset Thrawn to starting position
-            thrawn_x = 400
-            thrawn_y = 500
+            thrawn_x = SCREEN_WIDTH // 2
+            thrawn_y = SCREEN_HEIGHT - 100
 
             # Clear any remaining stuff
             lasers = []
@@ -336,6 +667,20 @@ while running:
             # Boss spawns immediately on next level!
             boss_spawn_score = 0  # Boss comes right away!
             boss_active = False
+
+            # PICK THE BOSS TYPE based on the level!
+            if level == 2:
+                boss_type = "zelda_queen"
+                boss_max_health = 25
+            elif level == 3:
+                boss_type = "giant_robot"
+                boss_max_health = 30
+            elif level == 4:
+                boss_type = "space_dragon"
+                boss_max_health = 35
+            else:  # Level 5 and beyond!
+                boss_type = "dancing_67"
+                boss_max_health = 40
 
             # Make the game HARDER each level!
             # Faster enemies, more swords, tougher boss!
@@ -419,12 +764,32 @@ while running:
 
         if distance_x < 25 and distance_y < 30:
             boss_lasers_to_remove.append(laser)
-            lives = lives - 1
+            # SHIELD CHECK! Does the shield block it?
+            if shield_hits > 0:
+                shield_hits = shield_hits - 1  # Shield takes the hit!
+                print("Shield blocked! " + str(shield_hits) + " shields left!")
+            else:
+                lives = lives - 1  # No shield? Lose a life!
             explosions.append([thrawn_x, thrawn_y, 300])
 
     for laser in boss_lasers_to_remove:
         if laser in boss_lasers:
             boss_lasers.remove(laser)
+
+    # --- ROBOT FIST HITS THRAWN? ---
+    # Check if the Giant Robot's rocket fist hit the player!
+    if robot_fist_active and boss_type == "giant_robot":
+        distance_x = abs(robot_fist_x - thrawn_x)
+        distance_y = abs(robot_fist_y - thrawn_y)
+        if distance_x < 30 and distance_y < 40:
+            robot_fist_active = False
+            robot_fist_y = -100
+            if shield_hits > 0:
+                shield_hits = shield_hits - 1
+                print("Shield blocked the ROCKET FIST!")
+            else:
+                lives = lives - 1
+            explosions.append([thrawn_x, thrawn_y, 400])
 
     # --- UPDATE EXPLOSIONS ---
     # Count down the explosion timers, remove old ones
@@ -444,7 +809,12 @@ while running:
         # If Zelda is close to Thrawn = OUCH!
         if distance_x < 40 and distance_y < 40:
             zeldas.remove(zelda)  # Remove the Zelda
-            lives = lives - 1     # Lose a life!
+            # SHIELD CHECK! Does the shield block it?
+            if shield_hits > 0:
+                shield_hits = shield_hits - 1  # Shield takes the hit!
+                print("Shield blocked! " + str(shield_hits) + " shields left!")
+            else:
+                lives = lives - 1  # No shield? Lose a life!
             # Make an explosion where Thrawn got hit!
             explosions.append([thrawn_x, thrawn_y, 300])
 
@@ -458,7 +828,12 @@ while running:
         # If sword is close to Thrawn = STABBED!
         if distance_x < 25 and distance_y < 30:
             swords_to_remove.append(sword)  # Remove the sword
-            lives = lives - 1               # Lose a life!
+            # SHIELD CHECK! Does the shield block it?
+            if shield_hits > 0:
+                shield_hits = shield_hits - 1  # Shield takes the hit!
+                print("Shield blocked! " + str(shield_hits) + " shields left!")
+            else:
+                lives = lives - 1  # No shield? Lose a life!
             # Make an explosion where Thrawn got hit!
             explosions.append([thrawn_x, thrawn_y, 300])
 
@@ -468,18 +843,34 @@ while running:
             swords.remove(sword)
 
     # --- GAME OVER? ---
-    # If you run out of lives, start the epic game over sequence!
+    # If you run out of lives, check if you have wingmen to save you!
     if lives <= 0 and not game_over:
-        game_over = True
-        game_over_timer = 0
-        # Create a HUGE explosion where Thrawn was!
-        # Multiple explosions spreading out from the ship!
-        for i in range(8):
-            # Random positions around Thrawn for multiple explosions
-            ex = thrawn_x + random.randint(-50, 50)
-            ey = thrawn_y + random.randint(-50, 50)
-            delay = i * 100  # Stagger the explosions!
-            game_over_explosions.append([ex, ey, 800 + delay, delay])  # x, y, timer, delay
+        # DO YOU HAVE A WINGMAN? They become the new Thrawn!
+        if len(wingmen) > 0:
+            # A wingman sacrifices themselves to save you!
+            savior = wingmen.pop(0)  # Get the first wingman
+            thrawn_x = savior[0]  # Thrawn teleports to wingman position
+            thrawn_y = savior[1]
+            lives = 1  # You're back with 1 life!
+            print("WINGMAN SAVED YOU! " + str(len(wingmen)) + " wingmen left!")
+            # Make a cool effect where you got saved!
+            explosions.append([thrawn_x, thrawn_y, 400])
+        else:
+            # No wingmen left... it's really game over!
+            game_over = True
+            game_over_timer = 0
+            # ADD YOUR SCORE TO YOUR COINS! You keep what you earned!
+            coins = coins + score
+            save_coins(coins)  # Save to file so you don't lose them!
+            print("You earned " + str(score) + " coins! Total: " + str(coins))
+            # Create a HUGE explosion where Thrawn was!
+            # Multiple explosions spreading out from the ship!
+            for i in range(8):
+                # Random positions around Thrawn for multiple explosions
+                ex = thrawn_x + random.randint(-50, 50)
+                ey = thrawn_y + random.randint(-50, 50)
+                delay = i * 100  # Stagger the explosions!
+                game_over_explosions.append([ex, ey, 800 + delay, delay])  # x, y, timer, delay
 
     # Update game over animation
     if game_over:
@@ -502,8 +893,8 @@ while running:
                 level = 1
 
                 # Reset Thrawn position
-                thrawn_x = 400
-                thrawn_y = 500
+                thrawn_x = SCREEN_WIDTH // 2
+                thrawn_y = SCREEN_HEIGHT - 100
 
                 # Clear all enemies and projectiles
                 lasers = []
@@ -514,13 +905,18 @@ while running:
 
                 # Reset boss stuff
                 boss_active = False
-                boss_x = 400
+                boss_x = SCREEN_WIDTH // 2
                 boss_y = -150
                 boss_health = 20
                 boss_max_health = 20
                 boss_spawn_score = 500
                 boss_defeated = False
                 boss_defeated_timer = 0
+                boss_type = "star_destroyer"  # Start with Star Destroyer!
+                robot_fist_active = False
+                robot_fist_y = -100
+                dragon_fire_timer = 0
+                dance_angle = 0
 
                 # Reset difficulty back to normal
                 zelda_speed = 0.01
@@ -531,21 +927,55 @@ while running:
                 level_complete = False
                 level_complete_timer = 0
 
+                # Reset ALL power-ups for next game!
+                has_speed_boost = False
+                has_shield = False
+                shield_hits = 0
+                has_fast_shooting = False
+                has_big_laser = False
+                wingmen = []
+                wingmen_count = 0
+                big_laser_active = False
+                big_laser_timer = 0
+                big_laser_cooldown = 0
+                shoot_cooldown = 0
+
     # Fill the window with BLACK (like space!)
     window.fill((0, 0, 0))
 
-    # --- DRAW THE STARS ---
-    # Go through each star and draw a tiny white dot
-    for star in stars:
-        pygame.draw.circle(window, (255, 255, 255), star, 2)
-        # (255, 255, 255) = WHITE, star = where to draw, 2 = tiny size
+    # --- MOVE AND DRAW THE STARS ---
+    # Stars scroll down to make it feel like you're flying through space!
+
+    # FAR STARS - tiny and slow (like really far away!)
+    for star in far_stars:
+        star[1] = star[1] + 0.02  # Move down slowly
+        if star[1] > SCREEN_HEIGHT:  # Wrap around to top
+            star[1] = 0
+            star[0] = random.randint(0, SCREEN_WIDTH)
+        pygame.draw.circle(window, (100, 100, 120), (int(star[0]), int(star[1])), 1)
+
+    # MEDIUM STARS - medium speed
+    for star in medium_stars:
+        star[1] = star[1] + 0.05  # Move down medium speed
+        if star[1] > SCREEN_HEIGHT:
+            star[1] = 0
+            star[0] = random.randint(0, SCREEN_WIDTH)
+        pygame.draw.circle(window, (180, 180, 200), (int(star[0]), int(star[1])), 2)
+
+    # CLOSE STARS - big and fast (zooming past!)
+    for star in close_stars:
+        star[1] = star[1] + 0.1  # Move down fast!
+        if star[1] > SCREEN_HEIGHT:
+            star[1] = 0
+            star[0] = random.randint(0, SCREEN_WIDTH)
+        pygame.draw.circle(window, (255, 255, 255), (int(star[0]), int(star[1])), 3)
 
     # --- DRAW THE TITLE SCREEN ---
     # Show the epic opening screen before the game starts!
     if game_state == "title":
         # --- STAR DESTROYER in the background! ---
         # It floats at the top, looking menacing!
-        title_boss_x = 400
+        title_boss_x = SCREEN_WIDTH // 2
         title_boss_y = 120 + math.sin(title_timer / 500) * 10  # Gentle floating!
 
         # Main body - big gray triangle (like a Star Destroyer!)
@@ -570,8 +1000,8 @@ while running:
 
         # --- ANGRY ZELDAS on the sides! ---
         # Left Zelda - bobbing up and down!
-        zelda1_x = 150
-        zelda1_y = 300 + math.sin(title_timer / 300) * 20
+        zelda1_x = 200
+        zelda1_y = 350 + math.sin(title_timer / 300) * 20
 
         # Hair!
         hair_color = (180, 130, 50)
@@ -596,8 +1026,8 @@ while running:
         pygame.draw.arc(window, (0, 0, 0), (zelda1_x - 10, zelda1_y + 5, 20, 10), 3.14, 6.28, 3)
 
         # Right Zelda - bobbing opposite!
-        zelda2_x = 650
-        zelda2_y = 300 + math.cos(title_timer / 300) * 20
+        zelda2_x = SCREEN_WIDTH - 200
+        zelda2_y = 350 + math.cos(title_timer / 300) * 20
 
         # Hair!
         pygame.draw.line(window, hair_color, (zelda2_x - 20, zelda2_y), (zelda2_x - 25, zelda2_y + 60), 4)
@@ -630,28 +1060,94 @@ while running:
         for offset_x in range(-int(glow_size), int(glow_size) + 1):
             for offset_y in range(-int(glow_size), int(glow_size) + 1):
                 glow_text = big_font.render("IN OUTSIDERELM", True, (0, 50, 150))
-                glow_rect = glow_text.get_rect(center=(400 + offset_x, 250 + offset_y))
+                glow_rect = glow_text.get_rect(center=(SCREEN_WIDTH // 2 + offset_x, 280 + offset_y))
                 window.blit(glow_text, glow_rect)
 
         # Draw the main title in bright blue!
-        title_rect = title_text.get_rect(center=(400, 250))
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 280))
         window.blit(title_text, title_rect)
 
         # --- CONTROLS INFO ---
         controls1 = font.render("ARROW KEYS = Move", True, (200, 200, 200))
-        controls1_rect = controls1.get_rect(center=(400, 420))
+        controls1_rect = controls1.get_rect(center=(SCREEN_WIDTH // 2, 520))
         window.blit(controls1, controls1_rect)
 
-        controls2 = font.render("SPACE = Shoot Lasers!", True, (255, 100, 100))
-        controls2_rect = controls2.get_rect(center=(400, 460))
+        controls2 = font.render("SPACE = Shoot   B = Mega Beam!", True, (255, 100, 100))
+        controls2_rect = controls2.get_rect(center=(SCREEN_WIDTH // 2, 560))
         window.blit(controls2, controls2_rect)
 
-        # --- PRESS ENTER TO START! ---
+        # --- PRESS ENTER TO GO TO SHOP! ---
         # This text blinks by changing visibility based on timer!
         if (title_timer // 500) % 2 == 0:  # Blink every 500 ticks!
-            start_text = medium_font.render("PRESS ENTER TO START!", True, (255, 255, 0))
-            start_rect = start_text.get_rect(center=(400, 530))
+            start_text = medium_font.render("PRESS ENTER FOR SHOP!", True, (255, 255, 0))
+            start_rect = start_text.get_rect(center=(SCREEN_WIDTH // 2, 650))
             window.blit(start_text, start_rect)
+
+        # Show how many coins you have!
+        coins_text = font.render("COINS: " + str(coins), True, (255, 215, 0))
+        coins_rect = coins_text.get_rect(center=(SCREEN_WIDTH // 2, 700))
+        window.blit(coins_text, coins_rect)
+
+    # --- DRAW THE SHOP SCREEN! ---
+    # The awesome shop where you buy power-ups!
+    if game_state == "shop":
+        # Cool shop title!
+        shop_title = big_font.render("SHOP", True, (255, 215, 0))
+        shop_title_rect = shop_title.get_rect(center=(SCREEN_WIDTH // 2, 60))
+        window.blit(shop_title, shop_title_rect)
+
+        # Show your coins in the corner!
+        coins_display = medium_font.render("COINS: " + str(coins), True, (255, 215, 0))
+        window.blit(coins_display, (20, 20))
+
+        # Draw each shop item! (centered on the bigger screen)
+        shop_left = (SCREEN_WIDTH - 800) // 2  # Center the shop box
+        for i in range(len(shop_items)):
+            item = shop_items[i]
+            y_pos = 150 + i * 90  # More space between items
+
+            # Is this item selected? Make it glow!
+            if i == shop_selection:
+                # Draw a glowing box around the selected item!
+                pygame.draw.rect(window, item["color"], (shop_left, y_pos - 10, 800, 70), 3)
+                text_color = item["color"]
+            else:
+                text_color = (150, 150, 150)  # Gray for unselected
+
+            # Item name
+            name_text = font.render(item["name"], True, text_color)
+            window.blit(name_text, (shop_left + 20, y_pos))
+
+            # Item description
+            desc_text = font.render(item["desc"], True, (100, 100, 100))
+            window.blit(desc_text, (shop_left + 20, y_pos + 30))
+
+            # Item price (except for START GAME)
+            if item["price"] > 0:
+                price_text = font.render(str(item["price"]) + " coins", True, (255, 215, 0))
+                window.blit(price_text, (shop_left + 600, y_pos))
+
+                # Show if you already own it!
+                if item["name"] == "SPEED BOOST" and has_speed_boost:
+                    owned_text = font.render("OWNED!", True, (0, 255, 0))
+                    window.blit(owned_text, (shop_left + 600, y_pos + 30))
+                elif item["name"] == "FAST SHOOTING" and has_fast_shooting:
+                    owned_text = font.render("OWNED!", True, (0, 255, 0))
+                    window.blit(owned_text, (shop_left + 600, y_pos + 30))
+                elif item["name"] == "BIG LASER" and has_big_laser:
+                    owned_text = font.render("OWNED!", True, (0, 255, 0))
+                    window.blit(owned_text, (shop_left + 600, y_pos + 30))
+                elif item["name"] == "SHIELD" and shield_hits > 0:
+                    owned_text = font.render("x" + str(shield_hits), True, (0, 255, 0))
+                    window.blit(owned_text, (shop_left + 600, y_pos + 30))
+                elif item["name"] == "WINGMAN" and wingmen_count > 0:
+                    owned_text = font.render("x" + str(wingmen_count), True, (0, 255, 0))
+                    window.blit(owned_text, (shop_left + 600, y_pos + 30))
+
+        # Instructions at the bottom!
+        instr1 = font.render("UP/DOWN = Select    ENTER = Buy", True, (200, 200, 200))
+        instr1_rect = instr1.get_rect(center=(SCREEN_WIDTH // 2, 720))
+        window.blit(instr1, instr1_rect)
 
     # --- DRAW THE EXPLOSIONS ---
     # Big colorful BOOM when Zeldas get hit!
@@ -675,6 +1171,23 @@ while running:
         # laser[0] is x position, laser[1] is y position
         pygame.draw.rect(window, (255, 0, 0), (laser[0] - 2, laser[1], 4, 15))
         # (255, 0, 0) = RED!, width = 4 pixels, height = 15 pixels
+
+    # --- DRAW THE BIG LASER (MEGA BEAM!) ---
+    # A massive beam of destruction from Thrawn to the top of the screen!
+    if big_laser_active and not game_over:
+        # The beam flickers and pulses for a cool effect!
+        flicker = random.randint(-5, 5)
+        beam_width = 40 + flicker
+
+        # Draw multiple layers for a glowing effect!
+        # Outer red glow
+        pygame.draw.rect(window, (255, 50, 50), (int(thrawn_x) - beam_width - 10, 0, (beam_width + 10) * 2, int(thrawn_y) - 30))
+        # Middle orange layer
+        pygame.draw.rect(window, (255, 150, 0), (int(thrawn_x) - beam_width, 0, beam_width * 2, int(thrawn_y) - 30))
+        # Inner yellow layer
+        pygame.draw.rect(window, (255, 255, 0), (int(thrawn_x) - beam_width + 10, 0, (beam_width - 10) * 2, int(thrawn_y) - 30))
+        # White hot center!
+        pygame.draw.rect(window, (255, 255, 255), (int(thrawn_x) - 15, 0, 30, int(thrawn_y) - 30))
 
     # --- DRAW THE SWORDS ---
     # Draw each sword as a silver blade with a golden handle!
@@ -704,66 +1217,155 @@ while running:
         pygame.draw.rect(window, (0, 255, 0), (lx - 3, ly, 6, 20))
         pygame.draw.rect(window, (150, 255, 150), (lx - 1, ly + 2, 2, 16))  # Bright center
 
-    # --- DRAW THE STAR DESTROYER BOSS ---
+    # --- DRAW THE BOSS ---
     if boss_active or boss_defeated_timer > 0:
         bx = int(boss_x)
         by = int(boss_y)
 
-        # Main body - big gray triangle (like a Star Destroyer!)
-        # The iconic wedge shape!
-        pygame.draw.polygon(window, (80, 80, 90), [
-            (bx, by - 40),           # Front point (nose)
-            (bx - 120, by + 40),     # Back left
-            (bx + 120, by + 40)      # Back right
-        ])
+        # === STAR DESTROYER ===
+        if boss_type == "star_destroyer":
+            # Main body - big gray triangle!
+            pygame.draw.polygon(window, (80, 80, 90), [
+                (bx, by - 40), (bx - 120, by + 40), (bx + 120, by + 40)
+            ])
+            # Bridge tower
+            pygame.draw.polygon(window, (60, 60, 70), [
+                (bx - 20, by + 10), (bx + 20, by + 10), (bx + 15, by - 10), (bx - 15, by - 10)
+            ])
+            pygame.draw.rect(window, (255, 255, 100), (bx - 10, by - 5, 20, 5))
+            # Engines
+            pygame.draw.circle(window, (100, 150, 255), (bx - 60, by + 40), 12)
+            pygame.draw.circle(window, (100, 150, 255), (bx, by + 40), 15)
+            pygame.draw.circle(window, (100, 150, 255), (bx + 60, by + 40), 12)
+            boss_name = "STAR DESTROYER"
 
-        # Bridge tower (the raised part on top)
-        pygame.draw.polygon(window, (60, 60, 70), [
-            (bx - 20, by + 10),      # Left
-            (bx + 20, by + 10),      # Right
-            (bx + 15, by - 10),      # Top right
-            (bx - 15, by - 10)       # Top left
-        ])
-        # Bridge windows (glowing)
-        pygame.draw.rect(window, (255, 255, 100), (bx - 10, by - 5, 20, 5))
+        # === MEGA ZELDA QUEEN ===
+        elif boss_type == "zelda_queen":
+            # HUGE green head!
+            pygame.draw.circle(window, (0, 180, 0), (bx, by), 60)
+            # SUPER long hair!
+            for i in range(-3, 4):
+                pygame.draw.line(window, (255, 200, 50), (bx + i * 20, by), (bx + i * 25, by + 120), 6)
+            # MEGA CROWN!
+            pygame.draw.polygon(window, (255, 215, 0), [
+                (bx - 50, by - 50), (bx - 35, by - 90), (bx - 20, by - 60),
+                (bx, by - 100), (bx + 20, by - 60), (bx + 35, by - 90), (bx + 50, by - 50)
+            ])
+            # Big jewels!
+            pygame.draw.circle(window, (255, 0, 0), (bx, by - 75), 10)
+            pygame.draw.circle(window, (0, 0, 255), (bx - 30, by - 65), 6)
+            pygame.draw.circle(window, (0, 0, 255), (bx + 30, by - 65), 6)
+            # ANGRY eyes!
+            pygame.draw.line(window, (0, 0, 0), (bx - 35, by - 20), (bx - 15, by - 10), 5)
+            pygame.draw.line(window, (0, 0, 0), (bx + 35, by - 20), (bx + 15, by - 10), 5)
+            pygame.draw.circle(window, (255, 0, 0), (bx - 25, by), 12)  # Evil red eyes!
+            pygame.draw.circle(window, (255, 0, 0), (bx + 25, by), 12)
+            # Angry mouth!
+            pygame.draw.arc(window, (0, 0, 0), (bx - 30, by + 15, 60, 30), 3.14, 6.28, 5)
+            boss_name = "MEGA ZELDA QUEEN"
 
-        # Engine glow at the back (3 engines)
-        pygame.draw.circle(window, (100, 150, 255), (bx - 60, by + 40), 12)  # Left engine
-        pygame.draw.circle(window, (100, 150, 255), (bx, by + 40), 15)       # Center engine
-        pygame.draw.circle(window, (100, 150, 255), (bx + 60, by + 40), 12)  # Right engine
-        # Bright engine cores
-        pygame.draw.circle(window, (200, 220, 255), (bx - 60, by + 40), 6)
-        pygame.draw.circle(window, (200, 220, 255), (bx, by + 40), 8)
-        pygame.draw.circle(window, (200, 220, 255), (bx + 60, by + 40), 6)
+        # === GIANT ROBOT ===
+        elif boss_type == "giant_robot":
+            # Robot body (gray metal box!)
+            pygame.draw.rect(window, (100, 100, 120), (bx - 60, by - 40, 120, 80))
+            # Robot head
+            pygame.draw.rect(window, (80, 80, 100), (bx - 30, by - 70, 60, 35))
+            # LASER EYES!
+            eye_glow = random.randint(200, 255)
+            pygame.draw.circle(window, (eye_glow, 0, 0), (bx - 15, by - 55), 10)
+            pygame.draw.circle(window, (eye_glow, 0, 0), (bx + 15, by - 55), 10)
+            # Arms
+            pygame.draw.rect(window, (70, 70, 90), (bx - 80, by - 20, 25, 60))
+            pygame.draw.rect(window, (70, 70, 90), (bx + 55, by - 20, 25, 60))
+            # Antenna
+            pygame.draw.line(window, (150, 150, 150), (bx, by - 70), (bx, by - 90), 3)
+            pygame.draw.circle(window, (255, 0, 0), (bx, by - 90), 5)
+            boss_name = "GIANT ROBOT"
+            # Draw rocket fist if active!
+            if robot_fist_active:
+                fx = int(robot_fist_x)
+                fy = int(robot_fist_y)
+                pygame.draw.rect(window, (150, 150, 170), (fx - 15, fy, 30, 40))
+                pygame.draw.circle(window, (255, 150, 0), (fx - 10, fy + 40), 8)
+                pygame.draw.circle(window, (255, 150, 0), (fx + 10, fy + 40), 8)
 
-        # Detail lines on the hull
-        pygame.draw.line(window, (50, 50, 60), (bx, by - 35), (bx - 100, by + 35), 2)
-        pygame.draw.line(window, (50, 50, 60), (bx, by - 35), (bx + 100, by + 35), 2)
-        pygame.draw.line(window, (50, 50, 60), (bx - 60, by + 20), (bx + 60, by + 20), 2)
+        # === SPACE DRAGON ===
+        elif boss_type == "space_dragon":
+            # Dragon body (purple!)
+            pygame.draw.ellipse(window, (150, 50, 200), (bx - 70, by - 30, 140, 60))
+            # Dragon head
+            pygame.draw.circle(window, (170, 60, 220), (bx + 60, by - 10), 35)
+            # Dragon eyes (yellow!)
+            pygame.draw.circle(window, (255, 255, 0), (bx + 70, by - 20), 10)
+            pygame.draw.circle(window, (0, 0, 0), (bx + 72, by - 20), 5)
+            # Dragon wings!
+            pygame.draw.polygon(window, (200, 80, 255), [
+                (bx - 30, by - 20), (bx - 100, by - 80), (bx - 60, by + 10)
+            ])
+            pygame.draw.polygon(window, (200, 80, 255), [
+                (bx + 10, by - 20), (bx + 60, by - 80), (bx + 30, by + 10)
+            ])
+            # Dragon horns!
+            pygame.draw.polygon(window, (100, 30, 130), [
+                (bx + 50, by - 40), (bx + 40, by - 70), (bx + 60, by - 35)
+            ])
+            pygame.draw.polygon(window, (100, 30, 130), [
+                (bx + 80, by - 40), (bx + 90, by - 70), (bx + 70, by - 35)
+            ])
+            # Fire mouth!
+            if boss_shoot_timer > boss_shoot_rate - 100:
+                pygame.draw.polygon(window, (255, 100, 0), [
+                    (bx + 85, by), (bx + 130, by + 30), (bx + 85, by + 20)
+                ])
+            boss_name = "SPACE DRAGON"
 
-        # Weapon turrets (little red dots)
-        pygame.draw.circle(window, (255, 50, 50), (bx - 40, by + 15), 4)
-        pygame.draw.circle(window, (255, 50, 50), (bx + 40, by + 15), 4)
-        pygame.draw.circle(window, (255, 50, 50), (bx, by + 25), 4)
+        # === SUPER DANCING 67 ===
+        elif boss_type == "dancing_67":
+            # Dancing robot body! Changes color!
+            dance_color_r = int(127 + 127 * math.sin(dance_angle * 5))
+            dance_color_g = int(127 + 127 * math.sin(dance_angle * 5 + 2))
+            dance_color_b = int(127 + 127 * math.sin(dance_angle * 5 + 4))
+            # Body
+            pygame.draw.rect(window, (dance_color_r, dance_color_g, dance_color_b), (bx - 40, by - 30, 80, 60))
+            # Head with disco ball effect!
+            pygame.draw.circle(window, (200, 200, 200), (bx, by - 50), 25)
+            # Disco sparkles!
+            for i in range(8):
+                sparkle_angle = dance_angle * 3 + i * 0.8
+                sx = bx + math.cos(sparkle_angle) * 20
+                sy = by - 50 + math.sin(sparkle_angle) * 20
+                pygame.draw.circle(window, (255, 255, 255), (int(sx), int(sy)), 3)
+            # Dancing arms!
+            arm_wave = math.sin(dance_angle * 10) * 30
+            pygame.draw.line(window, (dance_color_r, dance_color_g, dance_color_b),
+                           (bx - 40, by), (bx - 70, by - 20 + arm_wave), 8)
+            pygame.draw.line(window, (dance_color_r, dance_color_g, dance_color_b),
+                           (bx + 40, by), (bx + 70, by - 20 - arm_wave), 8)
+            # Dancing legs!
+            leg_wave = math.sin(dance_angle * 10 + 1.5) * 20
+            pygame.draw.line(window, (dance_color_r, dance_color_g, dance_color_b),
+                           (bx - 20, by + 30), (bx - 30 + leg_wave, by + 70), 8)
+            pygame.draw.line(window, (dance_color_r, dance_color_g, dance_color_b),
+                           (bx + 20, by + 30), (bx + 30 - leg_wave, by + 70), 8)
+            # "67" on its chest!
+            text_67 = font.render("67", True, (255, 255, 255))
+            text_rect = text_67.get_rect(center=(bx, by))
+            window.blit(text_67, text_rect)
+            boss_name = "SUPER DANCING 67"
 
-        # --- BOSS HEALTH BAR ---
+        # --- BOSS HEALTH BAR (for all bosses!) ---
         if boss_active:
-            # Draw health bar above the boss
             bar_width = 150
             bar_height = 10
             bar_x = bx - bar_width // 2
-            bar_y = by - 60
+            bar_y = by - 100 if boss_type != "star_destroyer" else by - 60
 
-            # Background (dark red)
             pygame.draw.rect(window, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
-            # Health (bright red) - shrinks as boss takes damage
             health_width = int((boss_health / boss_max_health) * bar_width)
             pygame.draw.rect(window, (255, 0, 0), (bar_x, bar_y, health_width, bar_height))
-            # Border
             pygame.draw.rect(window, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
 
-            # "BOSS" label
-            boss_label = font.render("STAR DESTROYER", True, (255, 255, 255))
+            boss_label = font.render(boss_name, True, (255, 255, 255))
             label_rect = boss_label.get_rect(center=(bx, bar_y - 15))
             window.blit(boss_label, label_rect)
 
@@ -816,6 +1418,15 @@ while running:
     # --- DRAW THRAWN ---
     # Only draw Thrawn if the game is NOT over (he exploded!)
     if not game_over:
+        # SHIELD BUBBLE! Draw it behind Thrawn if you have shields!
+        if shield_hits > 0:
+            # Glowing blue bubble around Thrawn!
+            # Outer glow
+            pygame.draw.circle(window, (50, 100, 200), (int(thrawn_x), int(thrawn_y)), 45, 3)
+            # Inner bubble (semi-transparent look with multiple circles)
+            pygame.draw.circle(window, (100, 150, 255), (int(thrawn_x), int(thrawn_y)), 42, 2)
+            pygame.draw.circle(window, (150, 200, 255), (int(thrawn_x), int(thrawn_y)), 38, 1)
+
         # Blue triangle spaceship body (3 points make a triangle!)
         # Point 1: top (nose of ship), Point 2: bottom-left, Point 3: bottom-right
         pygame.draw.polygon(window, (0, 100, 255), [
@@ -826,6 +1437,48 @@ while running:
         # Red glowing eyes!
         pygame.draw.circle(window, (255, 0, 0), (thrawn_x - 8, thrawn_y), 5)  # Left eye
         pygame.draw.circle(window, (255, 0, 0), (thrawn_x + 8, thrawn_y), 5)  # Right eye
+
+        # Speed boost effect! Draw flames behind Thrawn when boosted!
+        if has_speed_boost:
+            # Orange/yellow flames coming out the back!
+            pygame.draw.polygon(window, (255, 150, 0), [
+                (thrawn_x - 10, thrawn_y + 20),
+                (thrawn_x - 15, thrawn_y + 35 + random.randint(0, 10)),
+                (thrawn_x - 5, thrawn_y + 20)
+            ])
+            pygame.draw.polygon(window, (255, 150, 0), [
+                (thrawn_x + 5, thrawn_y + 20),
+                (thrawn_x + 15, thrawn_y + 35 + random.randint(0, 10)),
+                (thrawn_x + 10, thrawn_y + 20)
+            ])
+            # Yellow centers
+            pygame.draw.polygon(window, (255, 255, 0), [
+                (thrawn_x - 8, thrawn_y + 20),
+                (thrawn_x - 10, thrawn_y + 28 + random.randint(0, 5)),
+                (thrawn_x - 6, thrawn_y + 20)
+            ])
+            pygame.draw.polygon(window, (255, 255, 0), [
+                (thrawn_x + 6, thrawn_y + 20),
+                (thrawn_x + 10, thrawn_y + 28 + random.randint(0, 5)),
+                (thrawn_x + 8, thrawn_y + 20)
+            ])
+
+    # --- DRAW THE WINGMEN ---
+    # Your fleet of buddy ships that fight alongside Thrawn!
+    if game_state == "playing":
+        for wingman in wingmen:
+            wx = int(wingman[0])
+            wy = int(wingman[1])
+
+            # Green triangle ship (smaller than Thrawn!)
+            pygame.draw.polygon(window, (0, 200, 100), [
+                (wx, wy - 20),        # Top point (nose)
+                (wx - 15, wy + 12),   # Bottom-left
+                (wx + 15, wy + 12)    # Bottom-right
+            ])
+            # Little white eyes!
+            pygame.draw.circle(window, (255, 255, 255), (wx - 5, wy - 5), 3)
+            pygame.draw.circle(window, (255, 255, 255), (wx + 5, wy - 5), 3)
 
     # --- DRAW LEVEL COMPLETE! ---
     # When you beat the boss, show an awesome message!
@@ -842,17 +1495,17 @@ while running:
 
         # Main text in bright green!
         complete_text = big_font.render("LEVEL COMPLETE!", True, (0, 255, 0))
-        complete_rect = complete_text.get_rect(center=(400, 250))
+        complete_rect = complete_text.get_rect(center=(SCREEN_WIDTH // 2, 250))
         window.blit(complete_text, complete_rect)
 
         # Show what level is next!
         next_text = medium_font.render("Get ready for LEVEL " + str(level + 1) + "!", True, (255, 255, 0))
-        next_rect = next_text.get_rect(center=(400, 320))
+        next_rect = next_text.get_rect(center=(SCREEN_WIDTH // 2, 320))
         window.blit(next_text, next_rect)
 
         # Show score
         score_msg = font.render("Score: " + str(score), True, (255, 255, 255))
-        score_rect = score_msg.get_rect(center=(400, 380))
+        score_rect = score_msg.get_rect(center=(SCREEN_WIDTH // 2, 380))
         window.blit(score_msg, score_rect)
 
     # --- DRAW GAME OVER FART CLOUDS ---
@@ -907,23 +1560,23 @@ while running:
         if game_over_timer > 500:
             # Draw "GAME OVER" in big green stinky letters!
             game_over_text = big_font.render("GAME OVER", True, (100, 180, 50))
-            text_rect = game_over_text.get_rect(center=(400, 250))
+            text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, 250))
             window.blit(game_over_text, text_rect)
 
             # Funny fart message!
             fart_text = medium_font.render("* PFFFFFTTT *", True, (150, 200, 80))
-            fart_rect = fart_text.get_rect(center=(400, 310))
+            fart_rect = fart_text.get_rect(center=(SCREEN_WIDTH // 2, 310))
             window.blit(fart_text, fart_rect)
 
             # Show final score!
             final_score_text = medium_font.render("Final Score: " + str(score), True, (255, 255, 255))
-            score_rect = final_score_text.get_rect(center=(400, 370))
+            score_rect = final_score_text.get_rect(center=(SCREEN_WIDTH // 2, 370))
             window.blit(final_score_text, score_rect)
 
         # Show "Press any key" after a bit
         if game_over_timer > 3000:
             press_key_text = font.render("Press any key to return to lobby", True, (150, 150, 150))
-            key_rect = press_key_text.get_rect(center=(400, 430))
+            key_rect = press_key_text.get_rect(center=(SCREEN_WIDTH // 2, 430))
             window.blit(press_key_text, key_rect)
 
     # --- DRAW SCORE AND LIVES ---
@@ -935,12 +1588,36 @@ while running:
 
         # Show current level in the middle!
         level_text = font.render("LEVEL " + str(level), True, (0, 255, 255))
-        level_rect = level_text.get_rect(center=(400, 20))
+        level_rect = level_text.get_rect(center=(SCREEN_WIDTH // 2, 20))
         window.blit(level_text, level_rect)
 
         # Show lives in the top right!
         lives_text = font.render("LIVES: " + str(lives), True, (255, 0, 0))
-        window.blit(lives_text, (680, 10))  # Put it at top-right corner
+        window.blit(lives_text, (SCREEN_WIDTH - 120, 10))  # Put it at top-right corner
+
+        # --- POWER-UP DISPLAY ---
+        # Show what power-ups are active!
+        powerup_y = 40  # Start below the score
+
+        # Show shields
+        if shield_hits > 0:
+            shield_text = font.render("SHIELDS: " + str(shield_hits), True, (100, 200, 255))
+            window.blit(shield_text, (10, powerup_y))
+            powerup_y = powerup_y + 25
+
+        # Show wingmen count
+        if len(wingmen) > 0:
+            wingmen_text = font.render("WINGMEN: " + str(len(wingmen)), True, (0, 255, 100))
+            window.blit(wingmen_text, (10, powerup_y))
+            powerup_y = powerup_y + 25
+
+        # Show big laser status
+        if has_big_laser:
+            if big_laser_cooldown > 0:
+                laser_text = font.render("MEGA BEAM: Charging...", True, (150, 150, 0))
+            else:
+                laser_text = font.render("MEGA BEAM: READY! (B)", True, (255, 255, 0))
+            window.blit(laser_text, (10, powerup_y))
 
     # Show everything on screen
     pygame.display.flip()
