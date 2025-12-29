@@ -12,9 +12,21 @@ import os
 # JSON helps us save our coins to a file!
 import json
 import asyncio
+import sys
+
+# Detect if we're running on the web (Pygbag/Emscripten)
+# Web is slower so we need to speed things up!
+if sys.platform == "emscripten":
+    SPEED_MULT = 4  # Web runs at ~15 FPS, desktop at ~60, so 4x faster
+else:
+    SPEED_MULT = 1  # Desktop runs normal speed
 
 # Wake up Pygame! (like turning on a game console)
 pygame.init()
+
+# Create a clock to control game speed (60 frames per second!)
+clock = pygame.time.Clock()
+FPS = 60  # 60 frames per second - smooth and consistent!
 
 # --- MUSIC! ---
 # Initialize the music mixer and play some epic tunes!
@@ -101,7 +113,7 @@ pygame.display.set_caption("In Outsiderelm")
 # Thrawn starts at the bottom center of the screen
 thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
 thrawn_y = SCREEN_HEIGHT - 100  # Near the bottom
-thrawn_speed = .1  # How fast Thrawn moves (bigger = faster!)
+thrawn_speed = 0.1 * SPEED_MULT  # How fast Thrawn moves (bigger = faster!)
 
 # --- MAKE THE STARS ---
 # Lots of stars for a big space feeling!
@@ -130,7 +142,7 @@ stars = far_stars
 # --- LASERS ---
 # This list holds all the lasers Thrawn shoots!
 lasers = []  # Empty list - lasers get added when SPACE is pressed
-laser_speed = .5  # How fast lasers fly up (bigger = faster!)
+laser_speed = 0.5 * SPEED_MULT  # How fast lasers fly up (bigger = faster!)
 shoot_cooldown = 0  # Timer to prevent shooting too fast
 normal_shoot_rate = 300  # Normal time between shots
 fast_shoot_rate = 80  # Super fast shooting!
@@ -146,15 +158,15 @@ big_laser_cooldown_time = 2000  # Cooldown between big laser shots
 # --- ANGRY ZELDAS ---
 # These are the bad guys! Green circles with angry faces!
 zeldas = []  # Empty list to hold our angry Zeldas - each is [x, y, x_direction]
-zelda_speed = .01  # How fast Zeldas fly down (bigger = faster!)
-zelda_side_speed = .15  # How fast Zeldas move side to side!
+zelda_speed = 0.01 * SPEED_MULT  # How fast Zeldas fly down (bigger = faster!)
+zelda_side_speed = 0.15 * SPEED_MULT  # How fast Zeldas move side to side!
 zelda_spawn_timer = 0  # Counts up until it's time to spawn a new Zelda
 zelda_spawn_rate = 2000  # How often a new Zelda appears (bigger = less often)
 
 # --- ZELDA'S SWORDS ---
 # The Zeldas fight back by throwing swords at Thrawn!
 swords = []  # Each sword is [x, y] position
-sword_speed = 0.3  # How fast swords fly down (bigger = faster!)
+sword_speed = 0.3 * SPEED_MULT  # How fast swords fly down (bigger = faster!)
 sword_timer = 0  # Counts up until Zeldas throw more swords
 sword_rate = 1500  # How often Zeldas throw swords (bigger = less often)
 
@@ -187,7 +199,7 @@ boss_x = SCREEN_WIDTH // 2  # Boss x position (center of screen)
 boss_y = -150  # Boss y position (starts above screen)
 boss_health = 20  # How many hits to defeat the boss!
 boss_max_health = 20  # For the health bar
-boss_speed = 0.1  # How fast boss moves side to side
+boss_speed = 0.1 * SPEED_MULT  # How fast boss moves side to side
 boss_direction = 1  # 1 = moving right, -1 = moving left
 boss_shoot_timer = 0  # Timer for boss shooting
 boss_shoot_rate = 800  # How often boss shoots
@@ -641,8 +653,8 @@ async def main():
 
         # Move boss lasers
         for laser in boss_lasers:
-            laser[1] = laser[1] + 0.4  # Move down
-            laser[0] = laser[0] + laser[2]  # Move sideways based on angle
+            laser[1] = laser[1] + 0.4 * SPEED_MULT  # Move down
+            laser[0] = laser[0] + laser[2] * SPEED_MULT  # Move sideways based on angle
 
         # Remove boss lasers that went off screen
         boss_lasers_to_keep = []
@@ -935,7 +947,7 @@ async def main():
                     dance_angle = 0
 
                     # Reset difficulty back to normal
-                    zelda_speed = 0.01
+                    zelda_speed = 0.01 * SPEED_MULT
                     zelda_spawn_rate = 2000
                     sword_rate = 1500
 
@@ -964,7 +976,7 @@ async def main():
 
         # FAR STARS - tiny and slow (like really far away!)
         for star in far_stars:
-            star[1] = star[1] + 0.02  # Move down slowly
+            star[1] = star[1] + 0.02 * SPEED_MULT  # Move down slowly
             if star[1] > SCREEN_HEIGHT:  # Wrap around to top
                 star[1] = 0
                 star[0] = random.randint(0, SCREEN_WIDTH)
@@ -972,7 +984,7 @@ async def main():
 
         # MEDIUM STARS - medium speed
         for star in medium_stars:
-            star[1] = star[1] + 0.05  # Move down medium speed
+            star[1] = star[1] + 0.05 * SPEED_MULT  # Move down medium speed
             if star[1] > SCREEN_HEIGHT:
                 star[1] = 0
                 star[0] = random.randint(0, SCREEN_WIDTH)
@@ -980,7 +992,7 @@ async def main():
 
         # CLOSE STARS - big and fast (zooming past!)
         for star in close_stars:
-            star[1] = star[1] + 0.1  # Move down fast!
+            star[1] = star[1] + 0.1 * SPEED_MULT  # Move down fast!
             if star[1] > SCREEN_HEIGHT:
                 star[1] = 0
                 star[0] = random.randint(0, SCREEN_WIDTH)
@@ -1637,6 +1649,9 @@ async def main():
 
         # Show everything on screen
         pygame.display.flip()
+
+        # Control game speed - 60 FPS for smooth, consistent gameplay!
+        clock.tick(FPS)
 
     # Turn off Pygame when done
     pygame.quit()
