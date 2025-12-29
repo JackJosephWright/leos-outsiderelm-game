@@ -265,6 +265,7 @@ async def main():
     global zelda_speed, zelda_spawn_rate, sword_rate
 
     while running:
+        await asyncio.sleep(0)  # Let the browser breathe! (MUST be at start of loop for web!)
         # Check if player closes the window (clicks the X)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1635,11 +1636,9 @@ async def main():
                 window.blit(laser_text, (10, powerup_y))
 
         # Show everything on screen
-            await asyncio.sleep(0)  # Let the browser breathe!
         pygame.display.flip()
 
     # Turn off Pygame when done
-
-        pygame.quit()
+    pygame.quit()
 
 asyncio.run(main())
