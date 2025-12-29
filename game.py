@@ -16,10 +16,13 @@ import sys
 
 # Detect if we're running on the web (Pygbag/Emscripten)
 # Web is slower so we need to speed things up!
+print(f"Platform detected: {sys.platform}")
 if sys.platform == "emscripten":
-    SPEED_MULT = 4  # Web runs at ~15 FPS, desktop at ~60, so 4x faster
+    SPEED_MULT = 10  # Web is MUCH slower - need 10x speed!
+    print("WEB MODE: Speed multiplier = 10x")
 else:
     SPEED_MULT = 1  # Desktop runs normal speed
+    print("DESKTOP MODE: Speed multiplier = 1x")
 
 # Wake up Pygame! (like turning on a game console)
 pygame.init()
