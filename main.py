@@ -270,9 +270,52 @@ dance_angle = 0  # For Super Dancing 67's dance moves!
 # This controls if we're on the title screen, shop, or playing!
 # "title" = show the cool opening screen
 # "shop" = the AWESOME shop where you buy power-ups!
-# "playing" = the actual game!
+# "playing" = fly around space, discover planets, and fight Zeldas!
 game_state = "title"
 title_timer = 0  # Timer for cool animations on title screen!
+
+# --- SPACE EXPLORATION! ---
+# The big space world you can explore!
+WORLD_WIDTH = 4000   # How big is space? (4000 pixels wide)
+WORLD_HEIGHT = 4000  # (4000 pixels tall)
+
+# Camera position (what part of the world we're looking at)
+camera_x = 0
+camera_y = 0
+
+# Player position in the WORLD (not screen!)
+player_world_x = WORLD_WIDTH // 2  # Start in the middle of space
+player_world_y = WORLD_HEIGHT // 2
+player_walk_speed = 4  # Walking speed
+player_run_speed = 8   # Running speed (hold SHIFT)
+
+# --- PLANETS! ---
+# Planets to discover in space! Each planet is:
+# [x, y, name, color, size, discovered, has_zeldas, has_food, has_materials]
+planets = [
+    [500, 500, "Earth", (50, 150, 50), 80, True, True, True, True],       # Starting planet (discovered)
+    [1500, 800, "Mars", (200, 80, 50), 60, False, True, False, True],     # Red planet
+    [2500, 400, "Ice World", (150, 200, 255), 70, False, True, True, False],  # Cold planet
+    [3000, 2000, "Jungle", (30, 180, 30), 90, False, True, True, True],   # Green planet
+    [800, 2500, "Desert", (220, 180, 100), 65, False, True, False, True], # Sandy planet
+    [2000, 3200, "Ocean", (50, 100, 200), 85, False, False, True, False], # Water planet
+    [3500, 1200, "Volcano", (180, 50, 30), 55, False, True, False, True], # Fire planet
+    [1200, 1800, "Moon Base", (180, 180, 180), 40, False, False, False, True],  # Small moon
+]
+
+# Current planet (which planet are we battling on?)
+current_planet = None
+current_planet_name = "Space"
+
+# --- INVENTORY! ---
+# What you've collected!
+food = 100  # Start with some food (decreases over time!)
+materials = 0  # For building bases
+
+# --- SHUTTLE! ---
+# Your shuttle to travel to planets!
+near_planet = None  # Which planet are we near? (None if not near any)
+shuttle_cooldown = 0  # Can't spam the shuttle button
 
 # --- THE SHOP! ---
 # These are the things you can buy!
@@ -353,6 +396,9 @@ async def main():
     global star_scroll_y, cached_texts, last_score, last_level, last_lives, last_coins
     global chests, chest_spawn_timer, has_spread_shot, has_homing_missiles
     global has_piercing_laser, has_double_points, double_points_timer, homing_missiles
+    global camera_x, camera_y, player_world_x, player_world_y
+    global planets, current_planet, current_planet_name, near_planet
+    global food, materials, shuttle_cooldown
 
     # Track time for delta calculations
     last_time = pygame.time.get_ticks()
@@ -379,12 +425,21 @@ async def main():
             if event.type == SONG_END:
                 play_random_song()  # Pick another random song!
 
-            # --- PRESS ENTER TO GO TO SHOP! ---
-            # When on title screen, press ENTER to go to the SHOP!
+            # --- PRESS ENTER TO PLAY! ---
+            # When on title screen, press ENTER to start the game!
             if event.type == pygame.KEYDOWN and game_state == "title":
                 if event.key == pygame.K_RETURN:  # RETURN is the ENTER key!
-                    game_state = "shop"  # Go to the shop first!
-                    shop_selection = 0   # Start at the first item
+                    game_state = "playing"  # Start playing!
+                    # Center camera on player
+                    camera_x = player_world_x - SCREEN_WIDTH // 2
+                    camera_y = player_world_y - SCREEN_HEIGHT // 2
+
+            # --- IN-GAME CONTROLS! ---
+            # TAB opens the shop while playing!
+            if event.type == pygame.KEYDOWN and game_state == "playing" and not game_over:
+                if event.key == pygame.K_TAB:
+                    game_state = "shop"
+                    shop_selection = 0
 
             # --- SHOP CONTROLS! ---
             # In the shop, use UP/DOWN to pick items and ENTER to buy!
@@ -542,24 +597,50 @@ async def main():
             # Check which keys are being pressed right now
             keys = pygame.key.get_pressed()
 
-            # How fast should Thrawn move?
+            # How fast should Thrawn move? SHIFT to go faster!
             current_speed = thrawn_speed * dt  # Multiply by delta time!
+            if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+                current_speed = current_speed * 1.5  # BOOST!
 
-            # Move left (but don't go off screen!)
-            if keys[pygame.K_LEFT] and thrawn_x > 25:
-                thrawn_x = thrawn_x - current_speed
+            # Move in the WORLD (not just screen!)
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                player_world_x = player_world_x - current_speed
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                player_world_x = player_world_x + current_speed
+            if keys[pygame.K_UP] or keys[pygame.K_w]:
+                player_world_y = player_world_y - current_speed
+            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                player_world_y = player_world_y + current_speed
 
-            # Move right (but don't go off screen!)
-            if keys[pygame.K_RIGHT] and thrawn_x < SCREEN_WIDTH - 25:
-                thrawn_x = thrawn_x + current_speed
+            # Keep player in world bounds
+            player_world_x = max(50, min(WORLD_WIDTH - 50, player_world_x))
+            player_world_y = max(50, min(WORLD_HEIGHT - 50, player_world_y))
 
-            # Move up (but don't go off screen!)
-            if keys[pygame.K_UP] and thrawn_y > 30:
-                thrawn_y = thrawn_y - current_speed
+            # Camera follows player (smooth)
+            target_camera_x = player_world_x - SCREEN_WIDTH // 2
+            target_camera_y = player_world_y - SCREEN_HEIGHT // 2
+            camera_x = camera_x + (target_camera_x - camera_x) * 0.1 * dt
+            camera_y = camera_y + (target_camera_y - camera_y) * 0.1 * dt
 
-            # Move down (but don't go off screen!)
-            if keys[pygame.K_DOWN] and thrawn_y < SCREEN_HEIGHT - 20:
-                thrawn_y = thrawn_y + current_speed
+            # Keep camera in bounds
+            camera_x = max(0, min(WORLD_WIDTH - SCREEN_WIDTH, camera_x))
+            camera_y = max(0, min(WORLD_HEIGHT - SCREEN_HEIGHT, camera_y))
+
+            # Update thrawn_x/y to match world position on screen (for drawing and collisions)
+            thrawn_x = player_world_x - camera_x
+            thrawn_y = player_world_y - camera_y
+
+            # Check for nearby planets and discover them!
+            for planet in planets:
+                px, py = planet[0], planet[1]
+                dist = ((player_world_x - px) ** 2 + (player_world_y - py) ** 2) ** 0.5
+                planet_size = planet[4]
+
+                # Discover planet if close enough!
+                if dist < planet_size + 100:
+                    if not planet[5]:  # Not discovered yet?
+                        planet[5] = True  # DISCOVERED!
+                        print("DISCOVERED: " + planet[2] + "!")
 
         # --- UPDATE WINGMEN ---
         # Wingmen fly in formation around Thrawn!
@@ -862,16 +943,22 @@ async def main():
         if level_complete:
             level_complete_timer = level_complete_timer + delta_ms
 
-            # After 3 seconds (3000ms), go to next level!
+            # After 3 seconds (3000ms), return to space to explore more planets!
             if level_complete_timer > 3000:
-                # NEXT LEVEL!
-                level = level + 1
+                # PLANET CLEARED! Back to space exploration!
+                level = level + 1  # You've beaten more planets!
                 level_complete = False
                 level_complete_timer = 0
                 boss_defeated = False
                 boss_defeated_timer = 0
 
-                # Reset Thrawn to starting position
+                # Go back to exploring space!
+                game_state = "playing"
+                # Center camera on player
+                camera_x = player_world_x - SCREEN_WIDTH // 2
+                camera_y = player_world_y - SCREEN_HEIGHT // 2
+
+                # Reset Thrawn to starting position for next battle
                 thrawn_x = SCREEN_WIDTH // 2
                 thrawn_y = SCREEN_HEIGHT - 100
 
@@ -882,30 +969,18 @@ async def main():
                 boss_lasers = []
                 explosions = []
 
-                # Boss spawns immediately on next level!
-                boss_spawn_score = 0  # Boss comes right away!
+                # Reset battle stuff for next planet
+                boss_spawn_score = 500  # Boss comes after getting points
                 boss_active = False
+                score = 0  # Reset score for next planet battle
+                lives = 3  # Fresh lives for next planet!
 
-                # PICK THE BOSS TYPE based on the level!
-                if level == 2:
-                    boss_type = "zelda_queen"
-                    boss_max_health = 25
-                elif level == 3:
-                    boss_type = "giant_robot"
-                    boss_max_health = 30
-                elif level == 4:
-                    boss_type = "space_dragon"
-                    boss_max_health = 35
-                else:  # Level 5 and beyond!
-                    boss_type = "dancing_67"
-                    boss_max_health = 40
-
-                # Make the game HARDER each level!
-                # Faster enemies, more swords, tougher boss!
-                zelda_speed = zelda_speed + 0.2  # Zeldas fly faster!
-                zelda_spawn_rate = max(500, zelda_spawn_rate - 200)  # More Zeldas spawn!
-                sword_rate = max(500, sword_rate - 100)  # More swords thrown!
-                boss_max_health = boss_max_health + 5  # Boss has more health!
+                # Reset difficulty for next planet
+                zelda_speed = 1.5
+                zelda_spawn_rate = 2000
+                sword_rate = 1500
+                boss_max_health = 20 + (level * 5)  # Harder on each planet!
+                boss_type = "star_destroyer"  # Reset boss type
 
 
         # --- BOOM! COLLISION DETECTION ---
@@ -1146,12 +1221,14 @@ async def main():
             game_over_timer = game_over_timer + delta_ms
             # After showing explosions for a while, allow going back to lobby
             if game_over_timer > 5000:
-                # Press any key to go back to lobby!
+                # Press any key to go back to exploring!
                 keys = pygame.key.get_pressed()
                 if any(keys):
-                    # RESET EVERYTHING and go back to title screen!
-                    game_state = "title"
-                    title_timer = 0
+                    # RESET BATTLE and go back to space exploration!
+                    game_state = "playing"
+                    # Center camera on player
+                    camera_x = player_world_x - SCREEN_WIDTH // 2
+                    camera_y = player_world_y - SCREEN_HEIGHT // 2
                     game_over = False
                     game_over_timer = 0
                     game_over_explosions = []
@@ -1230,6 +1307,55 @@ async def main():
 
         # Blit the pre-rendered star surface (wrapping vertically)
         window.blit(star_surface, (0, int(star_scroll_y) - SCREEN_HEIGHT))
+
+        # --- DRAW PLANETS IN THE BACKGROUND (while playing!) ---
+        if game_state == "playing":
+            # Draw planets in the big world!
+            for planet in planets:
+                # Convert world position to screen position using camera
+                screen_x = int(planet[0] - camera_x)
+                screen_y = int(planet[1] - camera_y)
+
+                # Only draw if on screen
+                if -100 < screen_x < SCREEN_WIDTH + 100 and -100 < screen_y < SCREEN_HEIGHT + 100:
+                    size = planet[4]
+                    color = planet[3]
+                    discovered = planet[5]
+
+                    if discovered:
+                        # Draw the planet!
+                        pygame.draw.circle(window, color, (screen_x, screen_y), size)
+                        # Atmosphere glow
+                        pygame.draw.circle(window, (color[0]//2, color[1]//2, color[2]//2), (screen_x, screen_y), size + 10, 3)
+                        # Planet name
+                        name_text = font.render(planet[2], True, (255, 255, 255))
+                        name_rect = name_text.get_rect(center=(screen_x, screen_y - size - 20))
+                        window.blit(name_text, name_rect)
+                    else:
+                        # Unknown planet - show as "?"
+                        pygame.draw.circle(window, (50, 50, 50), (screen_x, screen_y), size)
+                        question = font.render("?", True, (100, 100, 100))
+                        q_rect = question.get_rect(center=(screen_x, screen_y))
+                        window.blit(question, q_rect)
+
+            # Draw mini-map in corner so you can see where you are!
+            minimap_size = 120
+            minimap_x = SCREEN_WIDTH - minimap_size - 10
+            minimap_y = 10
+            pygame.draw.rect(window, (20, 20, 40), (minimap_x, minimap_y, minimap_size, minimap_size))
+            pygame.draw.rect(window, (100, 100, 100), (minimap_x, minimap_y, minimap_size, minimap_size), 2)
+
+            # Draw planets on minimap
+            for planet in planets:
+                if planet[5]:  # Only show discovered planets
+                    mm_x = minimap_x + int((planet[0] / WORLD_WIDTH) * minimap_size)
+                    mm_y = minimap_y + int((planet[1] / WORLD_HEIGHT) * minimap_size)
+                    pygame.draw.circle(window, planet[3], (mm_x, mm_y), 3)
+
+            # Draw player on minimap
+            mm_px = minimap_x + int((player_world_x / WORLD_WIDTH) * minimap_size)
+            mm_py = minimap_y + int((player_world_y / WORLD_HEIGHT) * minimap_size)
+            pygame.draw.circle(window, (0, 255, 255), (mm_px, mm_py), 3)
 
         # --- DRAW THE TITLE SCREEN ---
         # Show the epic opening screen before the game starts!
@@ -1318,18 +1444,18 @@ async def main():
             window.blit(title_glow_surface, title_rect)
 
             # --- CONTROLS INFO ---
-            controls1 = font.render("ARROW KEYS = Move", True, (200, 200, 200))
+            controls1 = font.render("WASD/ARROWS = Move   SHIFT = Run", True, (200, 200, 200))
             controls1_rect = controls1.get_rect(center=(SCREEN_WIDTH // 2, 520))
             window.blit(controls1, controls1_rect)
 
-            controls2 = font.render("SPACE = Shoot   B = Mega Beam!", True, (255, 100, 100))
+            controls2 = font.render("Explore space, discover planets, battle Zeldas!", True, (255, 100, 100))
             controls2_rect = controls2.get_rect(center=(SCREEN_WIDTH // 2, 560))
             window.blit(controls2, controls2_rect)
 
-            # --- PRESS ENTER TO GO TO SHOP! ---
+            # --- PRESS ENTER TO START! ---
             # This text blinks by changing visibility based on timer!
             if (int(title_timer) // 500) % 2 == 0:  # Blink every 500ms!
-                start_text = medium_font.render("PRESS ENTER FOR SHOP!", True, (255, 255, 0))
+                start_text = medium_font.render("PRESS ENTER TO PLAY!", True, (255, 255, 0))
                 start_rect = start_text.get_rect(center=(SCREEN_WIDTH // 2, 650))
                 window.blit(start_text, start_rect)
 
@@ -1828,7 +1954,7 @@ async def main():
 
             # Show "Press any key" after a bit
             if game_over_timer > 3000:
-                press_key_text = font.render("Press any key to return to lobby", True, (150, 150, 150))
+                press_key_text = font.render("Press any key to return to space", True, (150, 150, 150))
                 key_rect = press_key_text.get_rect(center=(SCREEN_WIDTH // 2, 430))
                 window.blit(press_key_text, key_rect)
 
