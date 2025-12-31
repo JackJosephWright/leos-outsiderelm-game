@@ -116,8 +116,16 @@ pygame.display.set_caption("In Outsiderelm")
 # --- THRAWN THE HERO ---
 # Thrawn starts at the bottom center of the screen
 thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
-thrawn_y = SCREEN_HEIGHT - 100  # Near the bottom
+thrawn_y = SCREEN_HEIGHT // 2  # Middle of screen (so you don't drift!)
 thrawn_speed = 5  # How fast Thrawn moves in pixels per frame at 60 FPS
+
+# --- REALISTIC SPACE PHYSICS! ---
+# In space, things keep moving (momentum!)
+velocity_x = 0  # How fast moving left/right
+velocity_y = 0  # How fast moving up/down
+max_velocity = 8  # Top speed
+acceleration = 0.3  # How fast you speed up
+friction = 0.98  # Slow down gradually (0.98 = 2% per frame)
 
 # --- MAKE THE STARS ---
 # Lots of stars for a big space feeling!
@@ -198,16 +206,35 @@ medium_font = pygame.font.Font(None, 50)  # Medium font for final score
 star_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT * 2), pygame.SRCALPHA)
 star_surface.fill((0, 0, 0, 0))  # Transparent background
 
-# Draw all stars onto the surface ONCE
-for star in far_stars:
-    pygame.draw.circle(star_surface, (100, 100, 120), (int(star[0]), int(star[1])), 1)
-    pygame.draw.circle(star_surface, (100, 100, 120), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 1)
-for star in medium_stars:
-    pygame.draw.circle(star_surface, (180, 180, 200), (int(star[0]), int(star[1])), 2)
-    pygame.draw.circle(star_surface, (180, 180, 200), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 2)
-for star in close_stars:
-    pygame.draw.circle(star_surface, (255, 255, 255), (int(star[0]), int(star[1])), 3)
-    pygame.draw.circle(star_surface, (255, 255, 255), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 3)
+# REALISTIC STAR COLORS! (like real astronomy)
+# Blue = hot stars, White = medium, Yellow = like our sun, Orange/Red = cooler
+star_colors = [
+    (200, 220, 255),  # Blue-white (hot stars like Rigel)
+    (255, 255, 255),  # Pure white
+    (255, 255, 200),  # Yellow-white (like our Sun)
+    (255, 220, 180),  # Orange (like Arcturus)
+    (255, 180, 150),  # Red-orange (like Betelgeuse)
+    (180, 200, 255),  # Blue (young hot stars)
+]
+
+# Draw all stars onto the surface ONCE with realistic colors
+for i, star in enumerate(far_stars):
+    color = star_colors[i % len(star_colors)]
+    # Dim distant stars
+    dim_color = (color[0]//2, color[1]//2, color[2]//2)
+    pygame.draw.circle(star_surface, dim_color, (int(star[0]), int(star[1])), 1)
+    pygame.draw.circle(star_surface, dim_color, (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 1)
+for i, star in enumerate(medium_stars):
+    color = star_colors[(i + 2) % len(star_colors)]
+    pygame.draw.circle(star_surface, color, (int(star[0]), int(star[1])), 2)
+    pygame.draw.circle(star_surface, color, (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 2)
+for i, star in enumerate(close_stars):
+    color = star_colors[(i + 4) % len(star_colors)]
+    # Bright close stars with glow
+    pygame.draw.circle(star_surface, (color[0]//2, color[1]//2, color[2]//2), (int(star[0]), int(star[1])), 5)
+    pygame.draw.circle(star_surface, color, (int(star[0]), int(star[1])), 3)
+    pygame.draw.circle(star_surface, (color[0]//2, color[1]//2, color[2]//2), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 5)
+    pygame.draw.circle(star_surface, color, (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 3)
 
 # Star scroll position (for parallax effect)
 star_scroll_y = 0
@@ -268,11 +295,15 @@ dance_angle = 0  # For Super Dancing 67's dance moves!
 
 # --- GAME STATE ---
 # This controls if we're on the title screen, shop, or playing!
+# "signin" = enter your username!
 # "title" = show the cool opening screen
 # "shop" = the AWESOME shop where you buy power-ups!
 # "playing" = fly around space, discover planets, and fight Zeldas!
-game_state = "title"
+# "on_planet" = exploring a planet surface
+# "leaderboard" = view high scores!
+game_state = "signin"  # Start with sign in!
 title_timer = 0  # Timer for cool animations on title screen!
+username_input = ""  # What the player is typing for their name
 
 # --- SPACE EXPLORATION! ---
 # The big space world you can explore!
@@ -284,8 +315,8 @@ camera_x = 0
 camera_y = 0
 
 # Player position in the WORLD (not screen!)
-player_world_x = WORLD_WIDTH // 2  # Start in the middle of space
-player_world_y = WORLD_HEIGHT // 2
+player_world_x = 500  # Start ON Earth!
+player_world_y = 500
 player_walk_speed = 4  # Walking speed
 player_run_speed = 8   # Running speed (hold SHIFT)
 
@@ -294,13 +325,13 @@ player_run_speed = 8   # Running speed (hold SHIFT)
 # [x, y, name, color, size, discovered, has_zeldas, has_food, has_materials]
 planets = [
     [500, 500, "Earth", (50, 150, 50), 80, True, True, True, True],       # Starting planet (discovered)
-    [1500, 800, "Mars", (200, 80, 50), 60, False, True, False, True],     # Red planet
-    [2500, 400, "Ice World", (150, 200, 255), 70, False, True, True, False],  # Cold planet
-    [3000, 2000, "Jungle", (30, 180, 30), 90, False, True, True, True],   # Green planet
-    [800, 2500, "Desert", (220, 180, 100), 65, False, True, False, True], # Sandy planet
-    [2000, 3200, "Ocean", (50, 100, 200), 85, False, False, True, False], # Water planet
-    [3500, 1200, "Volcano", (180, 50, 30), 55, False, True, False, True], # Fire planet
-    [1200, 1800, "Moon Base", (180, 180, 180), 40, False, False, False, True],  # Small moon
+    [2500, 1500, "Mars", (200, 80, 50), 60, False, True, False, True],     # Red planet - FAR!
+    [4500, 800, "Ice World", (150, 200, 255), 70, False, True, True, False],  # Cold planet - VERY FAR!
+    [5500, 3500, "Jungle", (30, 180, 30), 90, False, True, True, True],   # Green planet - SUPER FAR!
+    [1500, 4000, "Desert", (220, 180, 100), 65, False, True, False, True], # Sandy planet - FAR!
+    [3500, 5500, "Ocean", (50, 100, 200), 85, False, False, True, False], # Water planet - VERY FAR!
+    [6000, 2000, "Volcano", (180, 50, 30), 55, False, True, False, True], # Fire planet - SUPER FAR!
+    [2000, 3000, "Moon Base", (180, 180, 180), 40, False, False, False, True],  # Small moon - FAR!
 ]
 
 # Current planet (which planet are we battling on?)
@@ -316,6 +347,63 @@ materials = 0  # For building bases
 # Your shuttle to travel to planets!
 near_planet = None  # Which planet are we near? (None if not near any)
 shuttle_cooldown = 0  # Can't spam the shuttle button
+on_planet = False  # Are we landed on a planet?
+planet_explore_x = 0  # Where are we on the planet surface?
+planet_explore_y = 0
+
+# --- BASES AND TURRETS! ---
+# Things you've built on planets!
+# Each base is [planet_name, x, y, type] where type is "base" or "turret"
+buildings = []
+BASE_COST = 50  # Materials needed to build a base
+TURRET_COST = 30  # Materials needed to build a turret
+
+# --- TURRET SHOOTING! ---
+# Turrets shoot at enemies automatically!
+turret_lasers = []  # Each laser is [x, y, dx, dy] - position and direction
+turret_shoot_timer = 0  # Timer for when turrets shoot
+
+# --- ACTIVE TURRETS ON SCREEN! ---
+# Turrets that appear during battle! Each is [x, y, health]
+active_turrets = []  # Gets filled based on buildings when playing
+
+# --- PLANET MATERIALS! ---
+# Materials scattered on the planet surface
+# Each material is [x, y, type] where type is "crystal" or "metal" or "rock"
+planet_materials = []  # Gets filled when you land on a planet
+
+# --- PLANET FOOD! ---
+# Food to collect on planets!
+planet_food = []  # Gets filled when you land on a planet with food
+hunger_rate = 0.003  # How fast food decreases per frame (slow and realistic)
+
+# --- USER SYSTEM! ---
+# Your username and high scores!
+current_user = ""  # Who is playing?
+leaderboard_file = "leaderboard.json"
+
+# Load the leaderboard!
+def load_leaderboard():
+    if os.path.exists(leaderboard_file):
+        try:
+            with open(leaderboard_file, "r") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+# Save to leaderboard!
+def save_to_leaderboard(username, score_value):
+    lb = load_leaderboard()
+    lb.append({"name": username, "score": score_value})
+    # Sort by score (highest first) and keep top 10
+    lb.sort(key=lambda x: x["score"], reverse=True)
+    lb = lb[:10]
+    with open(leaderboard_file, "w") as f:
+        json.dump(lb, f)
+    return lb
+
+leaderboard = load_leaderboard()
 
 # --- THE SHOP! ---
 # These are the things you can buy!
@@ -399,6 +487,10 @@ async def main():
     global camera_x, camera_y, player_world_x, player_world_y
     global planets, current_planet, current_planet_name, near_planet
     global food, materials, shuttle_cooldown
+    global on_planet, planet_explore_x, planet_explore_y, planet_materials, buildings
+    global planet_food, current_user, username_input, leaderboard
+    global velocity_x, velocity_y
+    global turret_lasers, turret_shoot_timer, active_turrets
 
     # Track time for delta calculations
     last_time = pygame.time.get_ticks()
@@ -425,6 +517,31 @@ async def main():
             if event.type == SONG_END:
                 play_random_song()  # Pick another random song!
 
+            # --- SIGN IN! ---
+            # Type your username and press ENTER!
+            if game_state == "signin":
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN and len(username_input) > 0:
+                        # Save username and go to title!
+                        current_user = username_input
+                        game_state = "title"
+                        print("Welcome, " + current_user + "!")
+                    elif event.key == pygame.K_BACKSPACE:
+                        # Delete last character
+                        username_input = username_input[:-1]
+                    elif event.key == pygame.K_TAB:
+                        # View leaderboard
+                        game_state = "leaderboard"
+                    elif len(username_input) < 12:  # Max 12 characters
+                        # Add the typed character (only letters and numbers!)
+                        if event.unicode.isalnum():
+                            username_input = username_input + event.unicode
+
+            # --- LEADERBOARD CONTROLS ---
+            if event.type == pygame.KEYDOWN and game_state == "leaderboard":
+                if event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE:
+                    game_state = "signin"  # Go back to sign in
+
             # --- PRESS ENTER TO PLAY! ---
             # When on title screen, press ENTER to start the game!
             if event.type == pygame.KEYDOWN and game_state == "title":
@@ -433,6 +550,9 @@ async def main():
                     # Center camera on player
                     camera_x = player_world_x - SCREEN_WIDTH // 2
                     camera_y = player_world_y - SCREEN_HEIGHT // 2
+                elif event.key == pygame.K_TAB:
+                    # View leaderboard from title
+                    game_state = "leaderboard"
 
             # --- IN-GAME CONTROLS! ---
             # TAB opens the shop while playing!
@@ -440,6 +560,56 @@ async def main():
                 if event.key == pygame.K_TAB:
                     game_state = "shop"
                     shop_selection = 0
+                # V key = take shuttle to land on planet!
+                if event.key == pygame.K_v and near_planet is not None:
+                    current_planet = near_planet
+                    current_planet_name = near_planet[2]
+                    on_planet = True
+                    game_state = "on_planet"
+                    planet_explore_x = SCREEN_WIDTH // 2
+                    planet_explore_y = SCREEN_HEIGHT // 2
+                    # Spawn materials on the planet!
+                    planet_materials = []
+                    if near_planet[8]:  # Has materials?
+                        for i in range(15):  # 15 materials to collect!
+                            mx = random.randint(100, SCREEN_WIDTH - 100)
+                            my = random.randint(100, SCREEN_HEIGHT - 100)
+                            mtype = random.choice(["crystal", "metal", "rock"])
+                            planet_materials.append([mx, my, mtype])
+                    # Spawn food on the planet!
+                    planet_food = []
+                    if near_planet[7]:  # Has food?
+                        for i in range(10):  # 10 food items!
+                            fx = random.randint(100, SCREEN_WIDTH - 100)
+                            fy = random.randint(100, SCREEN_HEIGHT - 100)
+                            ftype = random.choice(["apple", "meat", "berry"])
+                            planet_food.append([fx, fy, ftype])
+                    print("Landed on " + current_planet_name + "!")
+
+            # --- ON PLANET CONTROLS! ---
+            # Use elif so landing and returning don't happen in same frame!
+            elif event.type == pygame.KEYDOWN and game_state == "on_planet":
+                # V key = take shuttle back to space!
+                if event.key == pygame.K_v:
+                    on_planet = False
+                    game_state = "playing"
+                    print("Returned to space!")
+                # B key = build a BASE!
+                if event.key == pygame.K_b:
+                    if materials >= BASE_COST:
+                        materials = materials - BASE_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "base"])
+                        print("Built a BASE on " + current_planet_name + "!")
+                    else:
+                        print("Need " + str(BASE_COST) + " materials to build a base!")
+                # T key = build a TURRET!
+                if event.key == pygame.K_t:
+                    if materials >= TURRET_COST:
+                        materials = materials - TURRET_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "turret"])
+                        print("Built a TURRET on " + current_planet_name + "!")
+                    else:
+                        print("Need " + str(TURRET_COST) + " materials to build a turret!")
 
             # --- SHOP CONTROLS! ---
             # In the shop, use UP/DOWN to pick items and ENTER to buy!
@@ -598,49 +768,119 @@ async def main():
             keys = pygame.key.get_pressed()
 
             # How fast should Thrawn move? SHIFT to go faster!
-            current_speed = thrawn_speed * dt  # Multiply by delta time!
+            current_speed = thrawn_speed * dt
             if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
                 current_speed = current_speed * 1.5  # BOOST!
 
-            # Move in the WORLD (not just screen!)
+            # Move Thrawn directly (no drift)
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                player_world_x = player_world_x - current_speed
+                thrawn_x = thrawn_x - current_speed
             if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                player_world_x = player_world_x + current_speed
+                thrawn_x = thrawn_x + current_speed
             if keys[pygame.K_UP] or keys[pygame.K_w]:
-                player_world_y = player_world_y - current_speed
+                thrawn_y = thrawn_y - current_speed
             if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                player_world_y = player_world_y + current_speed
+                thrawn_y = thrawn_y + current_speed
 
-            # Keep player in world bounds
+            # Keep Thrawn on screen
+            thrawn_x = max(25, min(SCREEN_WIDTH - 25, thrawn_x))
+            thrawn_y = max(30, min(SCREEN_HEIGHT - 20, thrawn_y))
+
+            # Also update world position (for planet discovery) - VERY slow scrolling
+            # Planets move slowly and stay in view longer!
+            player_world_x = player_world_x + (thrawn_x - SCREEN_WIDTH // 2) * 0.02
+            player_world_y = player_world_y + (thrawn_y - SCREEN_HEIGHT // 2) * 0.02
+
+            # Keep in world bounds
             player_world_x = max(50, min(WORLD_WIDTH - 50, player_world_x))
             player_world_y = max(50, min(WORLD_HEIGHT - 50, player_world_y))
 
-            # Camera follows player (smooth)
-            target_camera_x = player_world_x - SCREEN_WIDTH // 2
-            target_camera_y = player_world_y - SCREEN_HEIGHT // 2
-            camera_x = camera_x + (target_camera_x - camera_x) * 0.1 * dt
-            camera_y = camera_y + (target_camera_y - camera_y) * 0.1 * dt
-
-            # Keep camera in bounds
+            # Camera slowly follows world position (for planet background)
+            camera_x = player_world_x - SCREEN_WIDTH // 2
+            camera_y = player_world_y - SCREEN_HEIGHT // 2
             camera_x = max(0, min(WORLD_WIDTH - SCREEN_WIDTH, camera_x))
             camera_y = max(0, min(WORLD_HEIGHT - SCREEN_HEIGHT, camera_y))
 
-            # Update thrawn_x/y to match world position on screen (for drawing and collisions)
-            thrawn_x = player_world_x - camera_x
-            thrawn_y = player_world_y - camera_y
-
-            # Check for nearby planets and discover them!
+            # Check if near any planets!
+            near_planet = None
             for planet in planets:
                 px, py = planet[0], planet[1]
                 dist = ((player_world_x - px) ** 2 + (player_world_y - py) ** 2) ** 0.5
                 planet_size = planet[4]
 
                 # Discover planet if close enough!
-                if dist < planet_size + 100:
+                if dist < planet_size + 200:
                     if not planet[5]:  # Not discovered yet?
                         planet[5] = True  # DISCOVERED!
                         print("DISCOVERED: " + planet[2] + "!")
+
+                # Near enough to land?
+                if dist < planet_size + 150:
+                    near_planet = planet
+
+        # --- ON PLANET MOVEMENT AND COLLECTION! ---
+        if game_state == "on_planet":
+            keys = pygame.key.get_pressed()
+            move_speed = 5 * dt
+
+            # Move around the planet surface!
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                planet_explore_x = planet_explore_x - move_speed
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                planet_explore_x = planet_explore_x + move_speed
+            if keys[pygame.K_UP] or keys[pygame.K_w]:
+                planet_explore_y = planet_explore_y - move_speed
+            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                planet_explore_y = planet_explore_y + move_speed
+
+            # Keep on screen
+            planet_explore_x = max(30, min(SCREEN_WIDTH - 30, planet_explore_x))
+            planet_explore_y = max(30, min(SCREEN_HEIGHT - 30, planet_explore_y))
+
+            # Collect materials!
+            materials_to_remove = []
+            for mat in planet_materials:
+                dist = ((planet_explore_x - mat[0]) ** 2 + (planet_explore_y - mat[1]) ** 2) ** 0.5
+                if dist < 40:  # Close enough to collect!
+                    materials_to_remove.append(mat)
+                    if mat[2] == "crystal":
+                        materials = materials + 5
+                    elif mat[2] == "metal":
+                        materials = materials + 3
+                    else:  # rock
+                        materials = materials + 1
+                    print("Collected " + mat[2] + "! Materials: " + str(materials))
+
+            for mat in materials_to_remove:
+                planet_materials.remove(mat)
+
+            # Collect food!
+            food_to_remove = []
+            for fd in planet_food:
+                dist = ((planet_explore_x - fd[0]) ** 2 + (planet_explore_y - fd[1]) ** 2) ** 0.5
+                if dist < 40:  # Close enough to collect!
+                    food_to_remove.append(fd)
+                    if fd[2] == "apple":
+                        food = min(100, food + 15)
+                    elif fd[2] == "meat":
+                        food = min(100, food + 25)
+                    else:  # berry
+                        food = min(100, food + 10)
+                    print("Ate " + fd[2] + "! Food: " + str(int(food)))
+
+            for fd in food_to_remove:
+                planet_food.remove(fd)
+
+        # --- HUNGER! ---
+        # Food decreases while playing (you get hungry!)
+        if game_state == "playing" and not game_over:
+            food = food - hunger_rate * dt
+            if food <= 0:
+                food = 0
+                # Starving = lose health!
+                lives = lives - 1
+                food = 30  # Get a little food back
+                print("STARVING! Lost a life!")
 
         # --- UPDATE WINGMEN ---
         # Wingmen fly in formation around Thrawn!
@@ -730,6 +970,169 @@ async def main():
             if sword[1] < SCREEN_HEIGHT + 50:
                 swords_to_keep.append(sword)
         swords = swords_to_keep
+
+        # --- TURRETS ON PLANETS SHOOT AT ENEMIES! ---
+        # Turrets you built on planets will help you fight!
+        if not game_over and game_state == "playing":
+            turret_shoot_timer = turret_shoot_timer + delta_ms
+
+            # Turrets shoot every 1.5 seconds
+            shoot_rate = 1500
+
+            if turret_shoot_timer >= shoot_rate:
+                # Check each building - if it's a turret and on screen, shoot!
+                for building in buildings:
+                    if building[3] == "turret":
+                        # Find which planet this turret is on
+                        turret_planet = None
+                        for planet in planets:
+                            if planet[2] == building[0]:  # Match planet name
+                                turret_planet = planet
+                                break
+
+                        if turret_planet is not None:
+                            # Get planet's screen position
+                            planet_screen_x = turret_planet[0] - camera_x
+                            planet_screen_y = turret_planet[1] - camera_y
+
+                            # Only shoot if planet is on screen!
+                            if planet_screen_x > -100 and planet_screen_x < SCREEN_WIDTH + 100:
+                                if planet_screen_y > -100 and planet_screen_y < SCREEN_HEIGHT + 100:
+                                    # Find a target (zelda or boss!)
+                                    target = None
+
+                                    # First try to target the boss if there is one!
+                                    if boss_active and boss_x > 0 and boss_x < SCREEN_WIDTH:
+                                        target = [boss_x, boss_y]
+
+                                    # Otherwise target a random zelda!
+                                    elif len(zeldas) > 0:
+                                        target = random.choice(zeldas)
+
+                                    # If we found a target, shoot at it!
+                                    if target is not None:
+                                        # Turret laser comes from the planet!
+                                        start_x = planet_screen_x
+                                        start_y = planet_screen_y
+
+                                        # Calculate direction to target
+                                        dx = target[0] - start_x
+                                        dy = target[1] - start_y
+                                        dist = max(1, (dx * dx + dy * dy) ** 0.5)
+
+                                        # Normalize and set speed
+                                        turret_speed = 8
+                                        dx = (dx / dist) * turret_speed
+                                        dy = (dy / dist) * turret_speed
+
+                                        # Create the turret laser! [x, y, dx, dy]
+                                        turret_lasers.append([start_x, start_y, dx, dy])
+
+                turret_shoot_timer = 0
+
+        # --- TURRETS GET HIT BY ENEMY WEAPONS! ---
+        # Swords can destroy turrets on visible planets!
+        buildings_to_remove = []
+        for building in buildings:
+            if building[3] == "turret":
+                # Find which planet this turret is on
+                turret_planet = None
+                for planet in planets:
+                    if planet[2] == building[0]:
+                        turret_planet = planet
+                        break
+
+                if turret_planet is not None:
+                    # Get planet's screen position
+                    planet_screen_x = turret_planet[0] - camera_x
+                    planet_screen_y = turret_planet[1] - camera_y
+
+                    # Only check hits if planet is on screen
+                    if planet_screen_x > -100 and planet_screen_x < SCREEN_WIDTH + 100:
+                        if planet_screen_y > -100 and planet_screen_y < SCREEN_HEIGHT + 100:
+                            # Initialize health if not set (old turrets)
+                            if len(building) < 5:
+                                building.append(3)  # Add health = 3
+
+                            # Check if hit by swords
+                            for sword in swords:
+                                dist = ((planet_screen_x - sword[0]) ** 2 + (planet_screen_y - sword[1]) ** 2) ** 0.5
+                                if dist < 50:
+                                    building[4] = building[4] - 1  # Lose health!
+                                    if sword in swords:
+                                        swords.remove(sword)
+                                    explosions.append([int(planet_screen_x), int(planet_screen_y), 0])
+                                    if building[4] <= 0:
+                                        buildings_to_remove.append(building)
+                                        print("A turret on " + building[0] + " was destroyed!")
+                                    break
+
+                            # Check if hit by boss lasers
+                            for blaser in boss_lasers:
+                                dist = ((planet_screen_x - blaser[0]) ** 2 + (planet_screen_y - blaser[1]) ** 2) ** 0.5
+                                if dist < 50:
+                                    building[4] = building[4] - 1  # Lose health!
+                                    if blaser in boss_lasers:
+                                        boss_lasers.remove(blaser)
+                                    explosions.append([int(planet_screen_x), int(planet_screen_y), 0])
+                                    if building[4] <= 0:
+                                        buildings_to_remove.append(building)
+                                        print("A turret on " + building[0] + " was destroyed!")
+                                    break
+
+        # Remove destroyed turrets
+        for building in buildings_to_remove:
+            if building in buildings:
+                buildings.remove(building)
+
+        # --- MOVE TURRET LASERS ---
+        for laser in turret_lasers:
+            laser[0] = laser[0] + laser[2] * dt  # Move x
+            laser[1] = laser[1] + laser[3] * dt  # Move y
+
+        # Remove turret lasers that went off screen
+        turret_lasers_to_keep = []
+        for laser in turret_lasers:
+            if laser[1] > -50 and laser[1] < SCREEN_HEIGHT + 50:
+                if laser[0] > -50 and laser[0] < SCREEN_WIDTH + 50:
+                    turret_lasers_to_keep.append(laser)
+        turret_lasers = turret_lasers_to_keep
+
+        # --- TURRET LASERS HIT ENEMIES! ---
+        # Check if turret lasers hit zeldas!
+        zeldas_hit = []
+        lasers_used = []
+        for laser in turret_lasers:
+            for zelda in zeldas:
+                # Check distance between laser and zelda
+                dist = ((laser[0] - zelda[0]) ** 2 + (laser[1] - zelda[1]) ** 2) ** 0.5
+                if dist < 35:  # Hit!
+                    if zelda not in zeldas_hit:
+                        zeldas_hit.append(zelda)
+                    if laser not in lasers_used:
+                        lasers_used.append(laser)
+                    score = score + 5  # Bonus points for turret kills!
+
+        # Remove hit zeldas and used lasers
+        for zelda in zeldas_hit:
+            if zelda in zeldas:
+                zeldas.remove(zelda)
+                # Add explosion!
+                explosions.append([zelda[0], zelda[1], 0])
+        for laser in lasers_used:
+            if laser in turret_lasers:
+                turret_lasers.remove(laser)
+
+        # Check if turret lasers hit the boss!
+        if boss_active:
+            for laser in turret_lasers:
+                dist = ((laser[0] - boss_x) ** 2 + (laser[1] - boss_y) ** 2) ** 0.5
+                if dist < 60:  # Hit the boss!
+                    boss_health = boss_health - 1
+                    if laser in turret_lasers:
+                        turret_lasers.remove(laser)
+                    # Add small explosion
+                    explosions.append([laser[0], laser[1], 0])
 
         # --- TREASURE CHESTS! ---
         # Spawn chests periodically during gameplay!
@@ -943,24 +1346,25 @@ async def main():
         if level_complete:
             level_complete_timer = level_complete_timer + delta_ms
 
-            # After 3 seconds (3000ms), return to space to explore more planets!
+            # After 3 seconds (3000ms), go to the SHOP!
             if level_complete_timer > 3000:
-                # PLANET CLEARED! Back to space exploration!
+                # PLANET CLEARED! Time to shop!
                 level = level + 1  # You've beaten more planets!
                 level_complete = False
                 level_complete_timer = 0
                 boss_defeated = False
                 boss_defeated_timer = 0
 
-                # Go back to exploring space!
-                game_state = "playing"
+                # Go to the SHOP after beating a boss!
+                game_state = "shop"
+                shop_selection = 0
                 # Center camera on player
                 camera_x = player_world_x - SCREEN_WIDTH // 2
                 camera_y = player_world_y - SCREEN_HEIGHT // 2
 
                 # Reset Thrawn to starting position for next battle
                 thrawn_x = SCREEN_WIDTH // 2
-                thrawn_y = SCREEN_HEIGHT - 100
+                thrawn_y = SCREEN_HEIGHT // 2
 
                 # Clear any remaining stuff
                 lasers = []
@@ -980,7 +1384,10 @@ async def main():
                 zelda_spawn_rate = 2000
                 sword_rate = 1500
                 boss_max_health = 20 + (level * 5)  # Harder on each planet!
-                boss_type = "star_destroyer"  # Reset boss type
+
+                # Cycle through different bosses based on level!
+                boss_types = ["star_destroyer", "zelda_queen", "giant_robot", "space_dragon", "dancing_67"]
+                boss_type = boss_types[(level - 1) % len(boss_types)]
 
 
         # --- BOOM! COLLISION DETECTION ---
@@ -1089,14 +1496,26 @@ async def main():
                 swords = []
                 boss_lasers = []
 
-        # --- BOSS LASERS HIT THRAWN? ---
-        # Check if boss's green lasers hit the player!
+        # --- BOSS LASERS HIT PLAYER? ---
+        # Check if boss's green lasers hit the player (astronaut or ship)!
         boss_lasers_to_remove = []
         for laser in boss_lasers:
-            distance_x = abs(laser[0] - thrawn_x)
-            distance_y = abs(laser[1] - thrawn_y)
+            # Use astronaut position when on planet, ship position in space!
+            if on_planet:
+                player_hit_x = planet_explore_x
+                player_hit_y = planet_explore_y
+                hit_range_x = 20  # Smaller hitbox for astronaut
+                hit_range_y = 25
+            else:
+                player_hit_x = thrawn_x
+                player_hit_y = thrawn_y
+                hit_range_x = 25  # Normal hitbox for ship
+                hit_range_y = 30
 
-            if distance_x < 25 and distance_y < 30:
+            distance_x = abs(laser[0] - player_hit_x)
+            distance_y = abs(laser[1] - player_hit_y)
+
+            if distance_x < hit_range_x and distance_y < hit_range_y:
                 boss_lasers_to_remove.append(laser)
                 # SHIELD CHECK! Does the shield block it?
                 if shield_hits > 0:
@@ -1104,7 +1523,7 @@ async def main():
                     print("Shield blocked! " + str(shield_hits) + " shields left!")
                 else:
                     lives = lives - 1  # No shield? Lose a life!
-                explosions.append([thrawn_x, thrawn_y, 300])
+                explosions.append([int(player_hit_x), int(player_hit_y), 300])
 
         for laser in boss_lasers_to_remove:
             if laser in boss_lasers:
@@ -1134,14 +1553,24 @@ async def main():
                 explosions_to_keep.append(explosion)
         explosions = explosions_to_keep
 
-        # --- ZELDA HITS THRAWN? OUCH! ---
-        # Check if any Zelda crashed into Thrawn!
+        # --- ZELDA HITS PLAYER? OUCH! ---
+        # Check if any Zelda crashed into player (astronaut or ship)!
         for zelda in zeldas:
-            distance_x = abs(zelda[0] - thrawn_x)
-            distance_y = abs(zelda[1] - thrawn_y)
+            # Use astronaut position when on planet, ship position in space!
+            if on_planet:
+                player_hit_x = planet_explore_x
+                player_hit_y = planet_explore_y
+                hit_range = 30  # Smaller hitbox for astronaut
+            else:
+                player_hit_x = thrawn_x
+                player_hit_y = thrawn_y
+                hit_range = 40  # Normal hitbox for ship
 
-            # If Zelda is close to Thrawn = OUCH!
-            if distance_x < 40 and distance_y < 40:
+            distance_x = abs(zelda[0] - player_hit_x)
+            distance_y = abs(zelda[1] - player_hit_y)
+
+            # If Zelda is close to player = OUCH!
+            if distance_x < hit_range and distance_y < hit_range:
                 zeldas.remove(zelda)  # Remove the Zelda
                 # SHIELD CHECK! Does the shield block it?
                 if shield_hits > 0:
@@ -1149,18 +1578,30 @@ async def main():
                     print("Shield blocked! " + str(shield_hits) + " shields left!")
                 else:
                     lives = lives - 1  # No shield? Lose a life!
-                # Make an explosion where Thrawn got hit!
-                explosions.append([thrawn_x, thrawn_y, 300])
+                # Make an explosion where player got hit!
+                explosions.append([int(player_hit_x), int(player_hit_y), 300])
 
-        # --- SWORD HITS THRAWN? OUCH! ---
-        # Check if any sword stabbed Thrawn!
+        # --- SWORD HITS PLAYER? OUCH! ---
+        # Check if any sword hit the player (astronaut on planet or ship in space)!
         swords_to_remove = []
         for sword in swords:
-            distance_x = abs(sword[0] - thrawn_x)
-            distance_y = abs(sword[1] - thrawn_y)
+            # Use astronaut position when on planet, ship position in space!
+            if on_planet:
+                player_hit_x = planet_explore_x
+                player_hit_y = planet_explore_y
+                hit_range_x = 20  # Smaller hitbox for astronaut
+                hit_range_y = 25
+            else:
+                player_hit_x = thrawn_x
+                player_hit_y = thrawn_y
+                hit_range_x = 25  # Normal hitbox for ship
+                hit_range_y = 30
 
-            # If sword is close to Thrawn = STABBED!
-            if distance_x < 25 and distance_y < 30:
+            distance_x = abs(sword[0] - player_hit_x)
+            distance_y = abs(sword[1] - player_hit_y)
+
+            # If sword is close to player = HIT!
+            if distance_x < hit_range_x and distance_y < hit_range_y:
                 swords_to_remove.append(sword)  # Remove the sword
                 # SHIELD CHECK! Does the shield block it?
                 if shield_hits > 0:
@@ -1168,8 +1609,8 @@ async def main():
                     print("Shield blocked! " + str(shield_hits) + " shields left!")
                 else:
                     lives = lives - 1  # No shield? Lose a life!
-                # Make an explosion where Thrawn got hit!
-                explosions.append([thrawn_x, thrawn_y, 300])
+                # Make an explosion where player got hit!
+                explosions.append([int(player_hit_x), int(player_hit_y), 300])
 
         # Remove swords that hit Thrawn
         for sword in swords_to_remove:
@@ -1197,6 +1638,10 @@ async def main():
                 coins = coins + score
                 save_coins(coins)  # Save to file so you don't lose them!
                 print("You earned " + str(score) + " coins! Total: " + str(coins))
+                # SAVE TO LEADERBOARD!
+                if current_user != "" and score > 0:
+                    leaderboard = save_to_leaderboard(current_user, score)
+                    print("Score saved to leaderboard!")
                 # ROGUELIKE: Lose chest power-ups on death! (but keep coins!)
                 has_spread_shot = False
                 has_homing_missiles = False
@@ -1240,7 +1685,7 @@ async def main():
 
                     # Reset Thrawn position
                     thrawn_x = SCREEN_WIDTH // 2
-                    thrawn_y = SCREEN_HEIGHT - 100
+                    thrawn_y = SCREEN_HEIGHT // 2
 
                     # Clear all enemies and projectiles
                     lasers = []
@@ -1323,18 +1768,48 @@ async def main():
                     discovered = planet[5]
 
                     if discovered:
-                        # Draw the planet!
+                        # REALISTIC PLANET DRAWING!
+                        # Outer atmosphere glow (soft halo)
+                        for glow in range(3):
+                            glow_size = size + 15 + glow * 5
+                            glow_alpha = 30 - glow * 10
+                            glow_color = (min(255, color[0] + 50), min(255, color[1] + 50), min(255, color[2] + 50))
+                            pygame.draw.circle(window, glow_color, (screen_x, screen_y), glow_size, 2)
+
+                        # Main planet body
                         pygame.draw.circle(window, color, (screen_x, screen_y), size)
-                        # Atmosphere glow
-                        pygame.draw.circle(window, (color[0]//2, color[1]//2, color[2]//2), (screen_x, screen_y), size + 10, 3)
-                        # Planet name
+
+                        # Surface details - craters/features (darker spots)
+                        crater_color = (max(0, color[0] - 40), max(0, color[1] - 40), max(0, color[2] - 40))
+                        # Use planet position to make consistent craters
+                        for c in range(3):
+                            cx = screen_x + int(math.sin(planet[0] + c * 2) * size * 0.4)
+                            cy = screen_y + int(math.cos(planet[1] + c * 3) * size * 0.3)
+                            crater_size = int(size * 0.15) + c * 2
+                            pygame.draw.circle(window, crater_color, (cx, cy), crater_size)
+
+                        # Highlight (sun reflection) - top left
+                        highlight_color = (min(255, color[0] + 60), min(255, color[1] + 60), min(255, color[2] + 60))
+                        pygame.draw.circle(window, highlight_color, (screen_x - size//3, screen_y - size//3), size//4)
+
+                        # Shadow on bottom right (3D effect)
+                        shadow_color = (max(0, color[0] - 60), max(0, color[1] - 60), max(0, color[2] - 60))
+                        pygame.draw.arc(window, shadow_color, (screen_x - size, screen_y - size, size*2, size*2),
+                                       -0.5, 1.2, int(size * 0.3))
+
+                        # Planet name with shadow
+                        name_shadow = font.render(planet[2], True, (0, 0, 0))
                         name_text = font.render(planet[2], True, (255, 255, 255))
                         name_rect = name_text.get_rect(center=(screen_x, screen_y - size - 20))
+                        window.blit(name_shadow, (name_rect.x + 2, name_rect.y + 2))
                         window.blit(name_text, name_rect)
                     else:
-                        # Unknown planet - show as "?"
-                        pygame.draw.circle(window, (50, 50, 50), (screen_x, screen_y), size)
-                        question = font.render("?", True, (100, 100, 100))
+                        # Unknown planet - mysterious dark sphere
+                        pygame.draw.circle(window, (30, 30, 40), (screen_x, screen_y), size)
+                        pygame.draw.circle(window, (50, 50, 60), (screen_x, screen_y), size, 2)
+                        # Mysterious glow
+                        pygame.draw.circle(window, (40, 40, 60), (screen_x, screen_y), size + 8, 1)
+                        question = font.render("?", True, (80, 80, 100))
                         q_rect = question.get_rect(center=(screen_x, screen_y))
                         window.blit(question, q_rect)
 
@@ -1356,6 +1831,173 @@ async def main():
             mm_px = minimap_x + int((player_world_x / WORLD_WIDTH) * minimap_size)
             mm_py = minimap_y + int((player_world_y / WORLD_HEIGHT) * minimap_size)
             pygame.draw.circle(window, (0, 255, 255), (mm_px, mm_py), 3)
+
+            # Show "Press V to land" when near a planet!
+            if near_planet is not None:
+                land_text = medium_font.render("Press V to land on " + near_planet[2], True, (255, 255, 0))
+                land_rect = land_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+                window.blit(land_text, land_rect)
+
+            # Show turret count if you have turrets!
+            turret_count = 0
+            for building in buildings:
+                if building[3] == "turret":
+                    turret_count = turret_count + 1
+            if turret_count > 0:
+                turret_text = font.render("Turrets: " + str(turret_count), True, (100, 255, 100))
+                window.blit(turret_text, (SCREEN_WIDTH - 120, 10))
+
+        # --- DRAW PLANET SURFACE! ---
+        if game_state == "on_planet":
+            # Draw the planet surface (colored based on planet!)
+            planet_color = current_planet[3] if current_planet else (100, 100, 100)
+            window.fill((planet_color[0]//2, planet_color[1]//2, planet_color[2]//2))
+
+            # Draw ground texture (simple lines)
+            for i in range(0, SCREEN_WIDTH, 50):
+                pygame.draw.line(window, planet_color, (i, 0), (i, SCREEN_HEIGHT), 1)
+            for i in range(0, SCREEN_HEIGHT, 50):
+                pygame.draw.line(window, planet_color, (0, i), (SCREEN_WIDTH, i), 1)
+
+            # Draw buildings on this planet!
+            for building in buildings:
+                if building[0] == current_planet_name:
+                    bx, by = int(building[1]), int(building[2])
+                    if building[3] == "base":
+                        # Base = big square
+                        pygame.draw.rect(window, (100, 100, 200), (bx - 30, by - 30, 60, 60))
+                        pygame.draw.rect(window, (150, 150, 255), (bx - 25, by - 25, 50, 50))
+                        base_label = font.render("BASE", True, (255, 255, 255))
+                        window.blit(base_label, (bx - 20, by - 10))
+                    else:  # turret
+                        # Turret = triangle on circle
+                        pygame.draw.circle(window, (200, 100, 100), (bx, by), 20)
+                        pygame.draw.polygon(window, (255, 150, 150), [
+                            (bx, by - 35), (bx - 15, by - 5), (bx + 15, by - 5)
+                        ])
+
+            # Draw materials to collect!
+            for mat in planet_materials:
+                mx, my = int(mat[0]), int(mat[1])
+                if mat[2] == "crystal":
+                    # Crystal = blue diamond
+                    pygame.draw.polygon(window, (100, 200, 255), [
+                        (mx, my - 15), (mx + 10, my), (mx, my + 15), (mx - 10, my)
+                    ])
+                elif mat[2] == "metal":
+                    # Metal = gray square
+                    pygame.draw.rect(window, (180, 180, 180), (mx - 10, my - 10, 20, 20))
+                else:  # rock
+                    # Rock = brown circle
+                    pygame.draw.circle(window, (139, 90, 43), (mx, my), 12)
+
+            # Draw food to collect!
+            for fd in planet_food:
+                fx, fy = int(fd[0]), int(fd[1])
+                if fd[2] == "apple":
+                    # Apple = red circle with stem
+                    pygame.draw.circle(window, (255, 50, 50), (fx, fy), 12)
+                    pygame.draw.line(window, (100, 60, 20), (fx, fy - 12), (fx + 3, fy - 18), 3)
+                elif fd[2] == "meat":
+                    # Meat = brown oval
+                    pygame.draw.ellipse(window, (180, 100, 80), (fx - 15, fy - 8, 30, 16))
+                    pygame.draw.ellipse(window, (200, 120, 100), (fx - 12, fy - 5, 24, 10))
+                else:  # berry
+                    # Berry = small purple circles
+                    pygame.draw.circle(window, (150, 50, 200), (fx - 5, fy), 6)
+                    pygame.draw.circle(window, (150, 50, 200), (fx + 5, fy), 6)
+                    pygame.draw.circle(window, (150, 50, 200), (fx, fy - 6), 6)
+
+            # Draw the player (astronaut!)
+            px, py = int(planet_explore_x), int(planet_explore_y)
+            pygame.draw.circle(window, (0, 100, 200), (px, py), 20)  # Body
+            pygame.draw.circle(window, (200, 200, 255), (px, py - 5), 12)  # Helmet
+            pygame.draw.circle(window, (255, 0, 0), (px - 4, py - 5), 3)  # Red eye
+            pygame.draw.circle(window, (255, 0, 0), (px + 4, py - 5), 3)  # Red eye
+
+            # Draw UI
+            planet_title = big_font.render(current_planet_name, True, (255, 255, 255))
+            window.blit(planet_title, (20, 20))
+
+            mat_text = font.render("Materials: " + str(materials), True, (200, 200, 100))
+            window.blit(mat_text, (20, 100))
+
+            # Food bar
+            food_label = font.render("Food:", True, (255, 255, 255))
+            window.blit(food_label, (20, 130))
+            pygame.draw.rect(window, (50, 50, 50), (100, 130, 150, 20))
+            food_width = int((food / 100) * 146)
+            food_color = (50, 200, 50) if food > 30 else (200, 50, 50)
+            pygame.draw.rect(window, food_color, (102, 132, food_width, 16))
+
+            controls1 = font.render("ARROWS = Move   V = Return to space", True, (200, 200, 200))
+            window.blit(controls1, (20, SCREEN_HEIGHT - 60))
+            controls2 = font.render("B = Build Base (" + str(BASE_COST) + ")   T = Build Turret (" + str(TURRET_COST) + ")", True, (200, 200, 200))
+            window.blit(controls2, (20, SCREEN_HEIGHT - 30))
+
+        # --- DRAW SIGN IN SCREEN! ---
+        if game_state == "signin":
+            window.fill((20, 20, 50))  # Dark blue background
+
+            # Title
+            signin_title = big_font.render("WELCOME!", True, (255, 255, 100))
+            title_rect = signin_title.get_rect(center=(SCREEN_WIDTH // 2, 150))
+            window.blit(signin_title, title_rect)
+
+            # Instructions
+            instr = medium_font.render("Enter your name:", True, (255, 255, 255))
+            instr_rect = instr.get_rect(center=(SCREEN_WIDTH // 2, 300))
+            window.blit(instr, instr_rect)
+
+            # Username input box
+            box_width = 400
+            box_x = SCREEN_WIDTH // 2 - box_width // 2
+            pygame.draw.rect(window, (50, 50, 80), (box_x, 350, box_width, 60))
+            pygame.draw.rect(window, (255, 255, 255), (box_x, 350, box_width, 60), 3)
+
+            # Show what they're typing
+            name_text = big_font.render(username_input + "_", True, (255, 255, 255))
+            name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, 380))
+            window.blit(name_text, name_rect)
+
+            # Hints
+            hint1 = font.render("Press ENTER when done", True, (150, 150, 150))
+            window.blit(hint1, (SCREEN_WIDTH // 2 - 100, 450))
+            hint2 = font.render("Press TAB to see leaderboard", True, (150, 150, 150))
+            window.blit(hint2, (SCREEN_WIDTH // 2 - 130, 480))
+
+        # --- DRAW LEADERBOARD! ---
+        if game_state == "leaderboard":
+            window.fill((20, 20, 50))  # Dark blue background
+
+            # Title
+            lb_title = big_font.render("LEADERBOARD", True, (255, 215, 0))
+            title_rect = lb_title.get_rect(center=(SCREEN_WIDTH // 2, 80))
+            window.blit(lb_title, title_rect)
+
+            # Show top scores
+            leaderboard = load_leaderboard()
+            if len(leaderboard) == 0:
+                no_scores = medium_font.render("No high scores yet!", True, (150, 150, 150))
+                ns_rect = no_scores.get_rect(center=(SCREEN_WIDTH // 2, 300))
+                window.blit(no_scores, ns_rect)
+            else:
+                for i, entry in enumerate(leaderboard[:10]):
+                    # Rank
+                    rank_color = (255, 215, 0) if i == 0 else (200, 200, 200) if i == 1 else (180, 100, 50) if i == 2 else (255, 255, 255)
+                    rank_text = medium_font.render(str(i + 1) + ".", True, rank_color)
+                    window.blit(rank_text, (300, 150 + i * 50))
+                    # Name
+                    name_text = medium_font.render(entry["name"], True, (255, 255, 255))
+                    window.blit(name_text, (380, 150 + i * 50))
+                    # Score
+                    score_text = medium_font.render(str(entry["score"]), True, (100, 255, 100))
+                    window.blit(score_text, (700, 150 + i * 50))
+
+            # Back hint
+            back_hint = font.render("Press ENTER to go back", True, (150, 150, 150))
+            bh_rect = back_hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+            window.blit(back_hint, bh_rect)
 
         # --- DRAW THE TITLE SCREEN ---
         # Show the epic opening screen before the game starts!
@@ -1547,6 +2189,55 @@ async def main():
                 pygame.draw.rect(window, (0, 200, 255), (laser[0] - 3, laser[1], 6, 25))
             else:
                 pygame.draw.rect(window, (255, 0, 0), (laser[0] - 2, laser[1], 4, 15))
+
+        # --- DRAW TURRET LASERS! ---
+        # Green lasers from your turrets!
+        for laser in turret_lasers:
+            lx = int(laser[0])
+            ly = int(laser[1])
+            # Draw a glowing green laser
+            pygame.draw.circle(window, (100, 255, 100), (lx, ly), 6)  # Outer glow
+            pygame.draw.circle(window, (200, 255, 200), (lx, ly), 3)  # Inner bright
+
+        # --- DRAW TURRETS ON PLANETS! ---
+        # Turrets show on planets when visible on screen!
+        for building in buildings:
+            if building[3] == "turret":
+                # Find which planet this turret is on
+                for planet in planets:
+                    if planet[2] == building[0]:
+                        # Get planet's screen position
+                        px = int(planet[0] - camera_x)
+                        py = int(planet[1] - camera_y)
+                        planet_size = planet[4]
+
+                        # Only draw if on screen
+                        if px > -100 and px < SCREEN_WIDTH + 100:
+                            if py > -100 and py < SCREEN_HEIGHT + 100:
+                                # Draw turret on top of planet
+                                tx = px
+                                ty = py - planet_size - 15  # Above the planet
+
+                                # Get health (default 3 if not set)
+                                health = building[4] if len(building) > 4 else 3
+
+                                # Turret base
+                                pygame.draw.rect(window, (80, 80, 80), (tx - 12, ty + 8, 24, 8))
+
+                                # Turret body (green)
+                                pygame.draw.rect(window, (50, 150, 50), (tx - 8, ty - 5, 16, 15))
+
+                                # Turret cannon
+                                pygame.draw.rect(window, (30, 100, 30), (tx - 3, ty - 15, 6, 12))
+
+                                # Turret dome
+                                pygame.draw.circle(window, (100, 200, 100), (tx, ty), 8)
+
+                                # Health bars
+                                for i in range(health):
+                                    health_color = (50, 255, 50) if health == 3 else (255, 255, 0) if health == 2 else (255, 50, 50)
+                                    pygame.draw.rect(window, health_color, (tx - 10 + (i * 8), ty + 18, 6, 3))
+                        break
 
         # --- DRAW HOMING MISSILES! ---
         # Orange missiles that track enemies!
@@ -1973,6 +2664,19 @@ async def main():
             # Show lives in the top right!
             lives_text = font.render("LIVES: " + str(lives), True, (255, 0, 0))
             window.blit(lives_text, (SCREEN_WIDTH - 120, 10))  # Put it at top-right corner
+
+            # Show food bar below score!
+            food_label = font.render("FOOD:", True, (255, 200, 100))
+            window.blit(food_label, (10, 35))
+            pygame.draw.rect(window, (50, 50, 50), (80, 38, 100, 15))
+            food_bar_width = int((food / 100) * 96)
+            food_bar_color = (50, 200, 50) if food > 30 else (200, 50, 50)
+            pygame.draw.rect(window, food_bar_color, (82, 40, food_bar_width, 11))
+
+            # Show username
+            if current_user != "":
+                user_text = font.render("Player: " + current_user, True, (150, 150, 255))
+                window.blit(user_text, (10, 55))
 
             # --- POWER-UP DISPLAY ---
             # Show what power-ups are active!
