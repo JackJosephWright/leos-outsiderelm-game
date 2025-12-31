@@ -72,7 +72,17 @@ After each piece, we run the game and see if it works!
 ---
 
 ## Current Status
-**Phase:** Getting Started - Waiting for Leo's game idea!
+**Phase:** Building the game!
+
+---
+
+## Known Bugs (FIX NEXT TIME!)
+
+### BUG: Up/Down movement rebounds back
+- **Problem:** When pressing UP or DOWN arrows, the player moves but then snaps back to where they were
+- **Likely cause:** The camera system or thrawn_y variable is conflicting with player_world_y
+- **Where to look:** Around line 595-645 in game.py where movement and camera are updated
+- **Fix idea:** Check if thrawn_x/y is being reset somewhere else, or if camera smoothing is fighting the movement
 
 ---
 
