@@ -279,7 +279,7 @@ title_timer = 0  # Timer for cool animations on title screen!
 shop_selection = 0  # Which item you're looking at (0, 1, 2, etc.)
 
 # Power-up prices (how many coins each one costs!)
-SPEED_BOOST_PRICE = 200      # Makes Thrawn go faster!
+SPEED_BOOST_PRICE = 350      # Makes Thrawn go faster! (more expensive now!)
 SHIELD_PRICE = 300           # Protects you from 1 hit!
 FAST_SHOOTING_PRICE = 250    # Shoot lasers super fast!
 BIG_LASER_PRICE = 500        # MEGA destruction beam!
@@ -293,6 +293,33 @@ has_fast_shooting = False    # Did you buy fast shooting?
 has_big_laser = False        # Did you buy the BIG LASER?
 wingmen = []                 # Your fleet of wingman ships! Each is [x, y]
 wingmen_count = 0            # How many wingmen you bought
+
+# --- CHESTS! ---
+# Treasure chests spawn during gameplay with awesome loot!
+chests = []  # Each chest is [x, y, chest_type] - chest_type determines the loot!
+chest_spawn_timer = 0  # Timer for spawning chests
+chest_spawn_rate = 8000  # Spawn a chest every 8 seconds (in ms)
+
+# Possible chest loot types:
+CHEST_TYPES = [
+    "spread_shot",      # Shoot 3 lasers at once!
+    "homing_missiles",  # Missiles that track enemies!
+    "piercing_laser",   # Laser goes through multiple enemies!
+    "double_points",    # 2x score for a while!
+    "extra_shield",     # Free shield!
+    "coin_bonus",       # Bonus coins!
+]
+
+# --- NEW WEAPONS FROM CHESTS! ---
+# These are temporary power-ups you find in chests (lost on death!)
+has_spread_shot = False      # Shoot 3 lasers in a spread pattern!
+has_homing_missiles = False  # Missiles track the nearest enemy!
+has_piercing_laser = False   # Lasers go through enemies!
+has_double_points = False    # Double score!
+double_points_timer = 0      # How long double points lasts
+
+# Homing missile tracking
+homing_missiles = []  # Each missile is [x, y, target_zelda]
 
 # Shop items list (for drawing the shop)
 shop_items = [
@@ -327,6 +354,8 @@ async def main():
     global far_stars, medium_stars, close_stars
     global zelda_speed, zelda_spawn_rate, sword_rate
     global star_scroll_y, cached_texts, last_score, last_level, last_lives, last_coins
+    global chests, chest_spawn_timer, has_spread_shot, has_homing_missiles
+    global has_piercing_laser, has_double_points, double_points_timer, homing_missiles
 
     # Track time for delta calculations
     last_time = pygame.time.get_ticks()
@@ -440,9 +469,20 @@ async def main():
                 if event.key == pygame.K_SPACE:  # Was it SPACE?
                     # Check if we can shoot (cooldown is done)
                     if shoot_cooldown <= 0:
-                        # Create a new laser at Thrawn's nose (top of the ship!)
-                        new_laser = [thrawn_x, thrawn_y - 30]  # [x position, y position]
-                        lasers.append(new_laser)  # Add it to our laser list!
+                        # SPREAD SHOT - shoot 3 lasers in a fan!
+                        if has_spread_shot:
+                            lasers.append([thrawn_x - 15, thrawn_y - 30])  # Left laser
+                            lasers.append([thrawn_x, thrawn_y - 30])       # Center laser
+                            lasers.append([thrawn_x + 15, thrawn_y - 30])  # Right laser
+                        else:
+                            # Normal single laser
+                            new_laser = [thrawn_x, thrawn_y - 30]
+                            lasers.append(new_laser)
+
+                        # HOMING MISSILES - shoot tracking missiles!
+                        if has_homing_missiles:
+                            homing_missiles.append([thrawn_x - 10, thrawn_y - 25])
+                            homing_missiles.append([thrawn_x + 10, thrawn_y - 25])
 
                         # WINGMEN SHOOT TOO! (when Thrawn shoots)
                         for wingman in wingmen:
@@ -623,6 +663,103 @@ async def main():
                 swords_to_keep.append(sword)
         swords = swords_to_keep
 
+        # --- TREASURE CHESTS! ---
+        # Spawn chests periodically during gameplay!
+        if not game_over and game_state == "playing":
+            chest_spawn_timer = chest_spawn_timer + delta_ms
+        if chest_spawn_timer >= chest_spawn_rate and not game_over and game_state == "playing":
+            # Time to spawn a treasure chest!
+            chest_x = random.randint(50, SCREEN_WIDTH - 50)
+            chest_y = -40  # Start above screen
+            chest_type = random.choice(CHEST_TYPES)  # Random loot!
+            chests.append([chest_x, chest_y, chest_type])
+            chest_spawn_timer = 0
+            print("A treasure chest appeared!")
+
+        # Move chests down the screen
+        for chest in chests:
+            chest[1] = chest[1] + 2 * dt  # Float down slowly
+
+        # Remove chests that went off screen
+        chests_to_keep = []
+        for chest in chests:
+            if chest[1] < SCREEN_HEIGHT + 50:
+                chests_to_keep.append(chest)
+        chests = chests_to_keep
+
+        # --- COLLECT CHESTS! ---
+        # Check if Thrawn touches a chest!
+        chests_to_remove = []
+        for chest in chests:
+            distance_x = abs(chest[0] - thrawn_x)
+            distance_y = abs(chest[1] - thrawn_y)
+            if distance_x < 40 and distance_y < 40:
+                chests_to_remove.append(chest)
+                # Apply the power-up based on chest type!
+                loot = chest[2]
+                if loot == "spread_shot":
+                    has_spread_shot = True
+                    print("GOT SPREAD SHOT! Shoot 3 lasers at once!")
+                elif loot == "homing_missiles":
+                    has_homing_missiles = True
+                    print("GOT HOMING MISSILES! They track enemies!")
+                elif loot == "piercing_laser":
+                    has_piercing_laser = True
+                    print("GOT PIERCING LASER! Goes through enemies!")
+                elif loot == "double_points":
+                    has_double_points = True
+                    double_points_timer = 10000  # 10 seconds of double points!
+                    print("GOT DOUBLE POINTS! 2x score for 10 seconds!")
+                elif loot == "extra_shield":
+                    shield_hits = shield_hits + 1
+                    has_shield = True
+                    print("GOT EXTRA SHIELD! Now have " + str(shield_hits) + " shields!")
+                elif loot == "coin_bonus":
+                    bonus = random.randint(50, 150)
+                    coins = coins + bonus
+                    save_coins(coins)
+                    print("GOT " + str(bonus) + " BONUS COINS!")
+                # Create a sparkle explosion!
+                explosions.append([chest[0], chest[1], 400])
+
+        for chest in chests_to_remove:
+            if chest in chests:
+                chests.remove(chest)
+
+        # Update double points timer
+        if has_double_points:
+            double_points_timer = double_points_timer - delta_ms
+            if double_points_timer <= 0:
+                has_double_points = False
+                print("Double points ended!")
+
+        # --- MOVE HOMING MISSILES! ---
+        # Homing missiles track the nearest Zelda!
+        for missile in homing_missiles:
+            # Find nearest Zelda
+            nearest_dist = 99999
+            target_x = missile[0]
+            target_y = missile[1] - 100  # Default: go up
+            for zelda in zeldas:
+                dist = abs(zelda[0] - missile[0]) + abs(zelda[1] - missile[1])
+                if dist < nearest_dist:
+                    nearest_dist = dist
+                    target_x = zelda[0]
+                    target_y = zelda[1]
+            # Move toward target
+            dx = target_x - missile[0]
+            dy = target_y - missile[1]
+            dist = max(1, (dx*dx + dy*dy) ** 0.5)
+            missile[0] = missile[0] + (dx / dist) * 8 * dt
+            missile[1] = missile[1] + (dy / dist) * 8 * dt
+
+        # Remove missiles that went off screen
+        missiles_to_keep = []
+        for missile in homing_missiles:
+            if 0 < missile[0] < SCREEN_WIDTH and -50 < missile[1] < SCREEN_HEIGHT + 50:
+                missiles_to_keep.append(missile)
+        homing_missiles = missiles_to_keep
+
         # --- STAR DESTROYER BOSS! ---
         # Spawn the boss when player reaches enough points!
         if score >= boss_spawn_score and not boss_active and not boss_defeated and not game_over and game_state == "playing":
@@ -798,12 +935,38 @@ async def main():
 
                 # If laser is within 30 pixels of Zelda's center = BOOM!
                 if distance_x < 30 and distance_y < 30:
-                    lasers_to_remove.append(laser)
+                    # PIERCING LASER goes through enemies! (don't remove laser)
+                    if not has_piercing_laser:
+                        lasers_to_remove.append(laser)
                     zeldas_to_remove.append(zelda)
                     # Create an explosion at the Zelda's position!
                     explosions.append([zelda[0], zelda[1], 500])  # 500 = how long explosion lasts
-                    # Add 100 points to the score! Nice shot!
-                    score = score + 100
+                    # Add points! DOUBLE if power-up active!
+                    points = 100
+                    if has_double_points:
+                        points = 200
+                    score = score + points
+
+        # --- HOMING MISSILES HIT ZELDAS! ---
+        missiles_to_remove = []
+        for missile in homing_missiles:
+            for zelda in zeldas:
+                distance_x = abs(missile[0] - zelda[0])
+                distance_y = abs(missile[1] - zelda[1])
+                if distance_x < 30 and distance_y < 30:
+                    missiles_to_remove.append(missile)
+                    if zelda not in zeldas_to_remove:
+                        zeldas_to_remove.append(zelda)
+                    explosions.append([zelda[0], zelda[1], 500])
+                    points = 100
+                    if has_double_points:
+                        points = 200
+                    score = score + points
+
+        # Remove missiles that hit
+        for missile in missiles_to_remove:
+            if missile in homing_missiles:
+                homing_missiles.remove(missile)
 
         # Remove the lasers and Zeldas that collided
         for laser in lasers_to_remove:
@@ -823,31 +986,46 @@ async def main():
 
                 # Boss hitbox is bigger than Zeldas!
                 if distance_x < 100 and distance_y < 50:
-                    if laser in lasers:
-                        lasers.remove(laser)
+                    # Piercing laser goes through boss too!
+                    if not has_piercing_laser:
+                        if laser in lasers:
+                            lasers.remove(laser)
                     boss_health = boss_health - 1
                     # Small explosion on the boss!
                     explosions.append([laser[0], laser[1], 300])
 
-                    # Did we defeat the boss?
-                    if boss_health <= 0:
-                        boss_active = False
-                        boss_defeated = True
-                        boss_defeated_timer = 0
-                        # LEVEL COMPLETE! Beat the boss!
-                        level_complete = True
-                        level_complete_timer = 0
-                        # HUGE score bonus for defeating the boss!
-                        score = score + 1000
-                        # Create massive explosion!
-                        for i in range(15):
-                            ex = boss_x + random.randint(-100, 100)
-                            ey = boss_y + random.randint(-50, 50)
-                            explosions.append([ex, ey, 600 + random.randint(0, 300)])
-                        # Clear all enemies - level is done!
-                        zeldas = []
-                        swords = []
-                        boss_lasers = []
+            # Homing missiles also hit the boss!
+            for missile in homing_missiles:
+                distance_x = abs(missile[0] - boss_x)
+                distance_y = abs(missile[1] - boss_y)
+                if distance_x < 100 and distance_y < 50:
+                    if missile in homing_missiles:
+                        homing_missiles.remove(missile)
+                    boss_health = boss_health - 2  # Missiles do 2 damage!
+                    explosions.append([missile[0], missile[1], 400])
+
+            # Did we defeat the boss?
+            if boss_health <= 0:
+                boss_active = False
+                boss_defeated = True
+                boss_defeated_timer = 0
+                # LEVEL COMPLETE! Beat the boss!
+                level_complete = True
+                level_complete_timer = 0
+                # HUGE score bonus for defeating the boss! (double if power-up!)
+                boss_bonus = 1000
+                if has_double_points:
+                    boss_bonus = 2000
+                score = score + boss_bonus
+                # Create massive explosion!
+                for i in range(15):
+                    ex = boss_x + random.randint(-100, 100)
+                    ey = boss_y + random.randint(-50, 50)
+                    explosions.append([ex, ey, 600 + random.randint(0, 300)])
+                # Clear all enemies - level is done!
+                zeldas = []
+                swords = []
+                boss_lasers = []
 
         # --- BOSS LASERS HIT THRAWN? ---
         # Check if boss's green lasers hit the player!
@@ -957,6 +1135,16 @@ async def main():
                 coins = coins + score
                 save_coins(coins)  # Save to file so you don't lose them!
                 print("You earned " + str(score) + " coins! Total: " + str(coins))
+                # ROGUELIKE: Lose chest power-ups on death! (but keep coins!)
+                has_spread_shot = False
+                has_homing_missiles = False
+                has_piercing_laser = False
+                has_double_points = False
+                double_points_timer = 0
+                homing_missiles = []
+                chests = []
+                chest_spawn_timer = 0
+                print("Lost all chest power-ups!")
                 # Create a HUGE explosion where Thrawn was!
                 # Multiple explosions spreading out from the ship!
                 for i in range(8):
@@ -1033,6 +1221,16 @@ async def main():
                     big_laser_timer = 0
                     big_laser_cooldown = 0
                     shoot_cooldown = 0
+
+                    # Reset chest power-ups too!
+                    has_spread_shot = False
+                    has_homing_missiles = False
+                    has_piercing_laser = False
+                    has_double_points = False
+                    double_points_timer = 0
+                    homing_missiles = []
+                    chests = []
+                    chest_spawn_timer = 0
 
         # Fill the window with BLACK (like space!)
         window.fill((0, 0, 0))
@@ -1235,8 +1433,50 @@ async def main():
         for laser in lasers:
             # pygame.draw.rect needs: window, color, (x, y, width, height)
             # laser[0] is x position, laser[1] is y position
-            pygame.draw.rect(window, (255, 0, 0), (laser[0] - 2, laser[1], 4, 15))
-            # (255, 0, 0) = RED!, width = 4 pixels, height = 15 pixels
+            # PIERCING LASER is BLUE and longer!
+            if has_piercing_laser:
+                pygame.draw.rect(window, (0, 200, 255), (laser[0] - 3, laser[1], 6, 25))
+            else:
+                pygame.draw.rect(window, (255, 0, 0), (laser[0] - 2, laser[1], 4, 15))
+
+        # --- DRAW HOMING MISSILES! ---
+        # Orange missiles that track enemies!
+        for missile in homing_missiles:
+            mx = int(missile[0])
+            my = int(missile[1])
+            # Missile body (orange)
+            pygame.draw.ellipse(window, (255, 150, 0), (mx - 4, my - 8, 8, 16))
+            # Missile tip (red)
+            pygame.draw.polygon(window, (255, 50, 0), [
+                (mx, my - 12), (mx - 4, my - 6), (mx + 4, my - 6)
+            ])
+            # Flame trail
+            pygame.draw.polygon(window, (255, 255, 0), [
+                (mx - 3, my + 8), (mx, my + 15), (mx + 3, my + 8)
+            ])
+
+        # --- DRAW TREASURE CHESTS! ---
+        # Golden chests floating down with goodies inside!
+        for chest in chests:
+            cx = int(chest[0])
+            cy = int(chest[1])
+            # Chest body (brown wood)
+            pygame.draw.rect(window, (139, 90, 43), (cx - 20, cy - 12, 40, 24))
+            # Chest lid (darker wood)
+            pygame.draw.rect(window, (100, 60, 30), (cx - 22, cy - 18, 44, 10))
+            # Gold trim
+            pygame.draw.rect(window, (255, 215, 0), (cx - 22, cy - 8, 44, 4))
+            # Gold lock
+            pygame.draw.circle(window, (255, 215, 0), (cx, cy), 6)
+            pygame.draw.circle(window, (200, 150, 0), (cx, cy), 3)
+            # Sparkle effect!
+            sparkle = int(title_timer / 200) % 4
+            if sparkle == 0:
+                pygame.draw.circle(window, (255, 255, 255), (cx - 15, cy - 15), 3)
+            elif sparkle == 1:
+                pygame.draw.circle(window, (255, 255, 255), (cx + 15, cy - 10), 3)
+            elif sparkle == 2:
+                pygame.draw.circle(window, (255, 255, 255), (cx + 10, cy + 5), 3)
 
         # --- DRAW THE BIG LASER (MEGA BEAM!) ---
         # A massive beam of destruction from Thrawn to the top of the screen!
@@ -1673,6 +1913,28 @@ async def main():
                 else:
                     laser_text = font.render("MEGA BEAM: READY! (B)", True, (255, 255, 0))
                 window.blit(laser_text, (10, powerup_y))
+                powerup_y = powerup_y + 25
+
+            # --- CHEST POWER-UPS! ---
+            # Show temporary power-ups from chests (right side of screen)
+            chest_y = 40
+            if has_spread_shot:
+                spread_text = font.render("SPREAD SHOT!", True, (255, 100, 100))
+                window.blit(spread_text, (SCREEN_WIDTH - 180, chest_y))
+                chest_y = chest_y + 25
+            if has_homing_missiles:
+                homing_text = font.render("HOMING MISSILES!", True, (255, 150, 0))
+                window.blit(homing_text, (SCREEN_WIDTH - 200, chest_y))
+                chest_y = chest_y + 25
+            if has_piercing_laser:
+                pierce_text = font.render("PIERCING LASER!", True, (0, 200, 255))
+                window.blit(pierce_text, (SCREEN_WIDTH - 185, chest_y))
+                chest_y = chest_y + 25
+            if has_double_points:
+                secs_left = int(double_points_timer / 1000)
+                double_text = font.render("2X POINTS! " + str(secs_left) + "s", True, (255, 255, 0))
+                window.blit(double_text, (SCREEN_WIDTH - 170, chest_y))
+                chest_y = chest_y + 25
 
         # Show everything on screen
         pygame.display.flip()
