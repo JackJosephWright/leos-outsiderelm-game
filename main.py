@@ -15,14 +15,15 @@ import asyncio
 import sys
 
 # Detect if we're running on the web (Pygbag/Emscripten)
-# Web is slower so we need to speed things up!
 print(f"Platform detected: {sys.platform}")
-if sys.platform == "emscripten":
-    SPEED_MULT = 10  # Web is MUCH slower - need 10x speed!
-    print("WEB MODE: Speed multiplier = 10x")
+IS_WEB = sys.platform == "emscripten"
+if IS_WEB:
+    print("WEB MODE: Using delta time for smooth movement!")
 else:
-    SPEED_MULT = 1  # Desktop runs normal speed
-    print("DESKTOP MODE: Speed multiplier = 1x")
+    print("DESKTOP MODE: Using delta time for smooth movement!")
+
+# Target frame time in milliseconds (for 60 FPS)
+TARGET_FRAME_TIME = 1000 / 60  # ~16.67ms per frame
 
 # Wake up Pygame! (like turning on a game console)
 pygame.init()
@@ -116,7 +117,7 @@ pygame.display.set_caption("In Outsiderelm")
 # Thrawn starts at the bottom center of the screen
 thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
 thrawn_y = SCREEN_HEIGHT - 100  # Near the bottom
-thrawn_speed = 0.1 * SPEED_MULT  # How fast Thrawn moves (bigger = faster!)
+thrawn_speed = 5  # How fast Thrawn moves in pixels per frame at 60 FPS
 
 # --- MAKE THE STARS ---
 # Lots of stars for a big space feeling!
@@ -145,10 +146,10 @@ stars = far_stars
 # --- LASERS ---
 # This list holds all the lasers Thrawn shoots!
 lasers = []  # Empty list - lasers get added when SPACE is pressed
-laser_speed = 0.5 * SPEED_MULT  # How fast lasers fly up (bigger = faster!)
+laser_speed = 10  # How fast lasers fly up in pixels per frame at 60 FPS
 shoot_cooldown = 0  # Timer to prevent shooting too fast
-normal_shoot_rate = 300  # Normal time between shots
-fast_shoot_rate = 80  # Super fast shooting!
+normal_shoot_rate = 300  # Normal time between shots (in ms)
+fast_shoot_rate = 80  # Super fast shooting! (in ms)
 
 # --- BIG LASER (MEGA BEAM!) ---
 # The ultimate weapon! A huge beam that destroys everything!
@@ -161,17 +162,17 @@ big_laser_cooldown_time = 2000  # Cooldown between big laser shots
 # --- ANGRY ZELDAS ---
 # These are the bad guys! Green circles with angry faces!
 zeldas = []  # Empty list to hold our angry Zeldas - each is [x, y, x_direction]
-zelda_speed = 0.01 * SPEED_MULT  # How fast Zeldas fly down (bigger = faster!)
-zelda_side_speed = 0.15 * SPEED_MULT  # How fast Zeldas move side to side!
+zelda_speed = 1.5  # How fast Zeldas fly down in pixels per frame at 60 FPS
+zelda_side_speed = 2  # How fast Zeldas move side to side!
 zelda_spawn_timer = 0  # Counts up until it's time to spawn a new Zelda
-zelda_spawn_rate = 2000  # How often a new Zelda appears (bigger = less often)
+zelda_spawn_rate = 2000  # How often a new Zelda appears (in ms)
 
 # --- ZELDA'S SWORDS ---
 # The Zeldas fight back by throwing swords at Thrawn!
 swords = []  # Each sword is [x, y] position
-sword_speed = 0.3 * SPEED_MULT  # How fast swords fly down (bigger = faster!)
+sword_speed = 5  # How fast swords fly down in pixels per frame at 60 FPS
 sword_timer = 0  # Counts up until Zeldas throw more swords
-sword_rate = 1500  # How often Zeldas throw swords (bigger = less often)
+sword_rate = 1500  # How often Zeldas throw swords (in ms)
 
 # --- EXPLOSIONS ---
 # When a laser hits a Zelda, BOOM! We show an explosion!
@@ -192,6 +193,53 @@ font = pygame.font.Font(None, 36)  # 36 = size of the text
 big_font = pygame.font.Font(None, 100)  # BIG font for GAME OVER!
 medium_font = pygame.font.Font(None, 50)  # Medium font for final score
 
+# --- PRE-RENDERED SURFACES FOR PERFORMANCE ---
+# Pre-render the star background so we don't draw 150 circles every frame!
+star_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT * 2), pygame.SRCALPHA)
+star_surface.fill((0, 0, 0, 0))  # Transparent background
+
+# Draw all stars onto the surface ONCE
+for star in far_stars:
+    pygame.draw.circle(star_surface, (100, 100, 120), (int(star[0]), int(star[1])), 1)
+    pygame.draw.circle(star_surface, (100, 100, 120), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 1)
+for star in medium_stars:
+    pygame.draw.circle(star_surface, (180, 180, 200), (int(star[0]), int(star[1])), 2)
+    pygame.draw.circle(star_surface, (180, 180, 200), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 2)
+for star in close_stars:
+    pygame.draw.circle(star_surface, (255, 255, 255), (int(star[0]), int(star[1])), 3)
+    pygame.draw.circle(star_surface, (255, 255, 255), (int(star[0]), int(star[1]) + SCREEN_HEIGHT), 3)
+
+# Star scroll position (for parallax effect)
+star_scroll_y = 0
+
+# Pre-render the title glow effect ONCE instead of every frame!
+title_glow_surface = pygame.Surface((600, 120), pygame.SRCALPHA)
+title_text_main = big_font.render("IN OUTSIDERELM", True, (0, 100, 255))
+title_text_glow = big_font.render("IN OUTSIDERELM", True, (0, 50, 150))
+# Draw glow by rendering offset copies
+for offset_x in range(-3, 4):
+    for offset_y in range(-3, 4):
+        title_glow_surface.blit(title_text_glow, (50 + offset_x, 10 + offset_y))
+# Draw main title on top
+title_glow_surface.blit(title_text_main, (50, 10))
+
+# Pre-render level complete glow too!
+level_complete_surface = pygame.Surface((700, 120), pygame.SRCALPHA)
+complete_text_main = big_font.render("LEVEL COMPLETE!", True, (0, 255, 0))
+complete_text_glow = big_font.render("LEVEL COMPLETE!", True, (0, 100, 0))
+for offset_x in range(-3, 4):
+    for offset_y in range(-3, 4):
+        level_complete_surface.blit(complete_text_glow, (50 + offset_x, 10 + offset_y))
+level_complete_surface.blit(complete_text_main, (50, 10))
+
+# --- TEXT CACHE ---
+# Cache rendered text to avoid re-rendering every frame
+cached_texts = {}
+last_score = -1
+last_level = -1
+last_lives = -1
+last_coins = -1
+
 # --- BOSS SYSTEM ---
 # Different bosses appear on different levels!
 # Level 1: Star Destroyer, Level 2: Mega Zelda Queen,
@@ -202,7 +250,7 @@ boss_x = SCREEN_WIDTH // 2  # Boss x position (center of screen)
 boss_y = -150  # Boss y position (starts above screen)
 boss_health = 20  # How many hits to defeat the boss!
 boss_max_health = 20  # For the health bar
-boss_speed = 0.1 * SPEED_MULT  # How fast boss moves side to side
+boss_speed = 3  # How fast boss moves side to side in pixels per frame at 60 FPS
 boss_direction = 1  # 1 = moving right, -1 = moving left
 boss_shoot_timer = 0  # Timer for boss shooting
 boss_shoot_rate = 800  # How often boss shoots
@@ -278,9 +326,24 @@ async def main():
     global game_over, game_over_timer, game_over_explosions
     global far_stars, medium_stars, close_stars
     global zelda_speed, zelda_spawn_rate, sword_rate
+    global star_scroll_y, cached_texts, last_score, last_level, last_lives, last_coins
+
+    # Track time for delta calculations
+    last_time = pygame.time.get_ticks()
 
     while running:
         await asyncio.sleep(0)  # Let the browser breathe! (MUST be at start of loop for web!)
+
+        # Calculate delta time (how long since last frame)
+        current_time = pygame.time.get_ticks()
+        delta_ms = current_time - last_time
+        last_time = current_time
+
+        # Convert to a multiplier (1.0 = perfect 60 FPS, 2.0 = 30 FPS, etc.)
+        # Cap delta to prevent huge jumps if game freezes
+        delta_ms = min(delta_ms, 100)  # Cap at 100ms (10 FPS minimum)
+        dt = delta_ms / TARGET_FRAME_TIME  # dt = 1.0 at 60 FPS
+
         # Check if player closes the window (clicks the X)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -403,17 +466,17 @@ async def main():
         # --- TITLE SCREEN ---
         # If we're on the title screen, update the timer and skip game logic!
         if game_state == "title":
-            title_timer = title_timer + 1
+            title_timer = title_timer + delta_ms
 
         # --- UPDATE SHOOTING COOLDOWN ---
         # Count down the cooldown timer so you can shoot again!
         if shoot_cooldown > 0:
-            shoot_cooldown = shoot_cooldown - 1
+            shoot_cooldown = shoot_cooldown - delta_ms
 
         # --- UPDATE BIG LASER ---
         # If the big laser is active, count down its timer and destroy enemies!
         if big_laser_active:
-            big_laser_timer = big_laser_timer - 1
+            big_laser_timer = big_laser_timer - delta_ms
             if big_laser_timer <= 0:
                 big_laser_active = False
                 big_laser_cooldown = big_laser_cooldown_time  # Start cooldown!
@@ -435,14 +498,14 @@ async def main():
             # Big laser also damages the BOSS!
             if boss_active and not boss_defeated:
                 if abs(boss_x - thrawn_x) < 100 and boss_y > 0:
-                    # Constant damage while beam is on boss!
-                    if big_laser_timer % 50 == 0:  # Damage every 50 ticks
+                    # Constant damage while beam is on boss! (damage every ~50ms)
+                    if int(big_laser_timer / 50) != int((big_laser_timer + delta_ms) / 50):
                         boss_health = boss_health - 1
                         explosions.append([boss_x + random.randint(-50, 50), boss_y + random.randint(-20, 20), 200])
 
         # Count down big laser cooldown
         if big_laser_cooldown > 0:
-            big_laser_cooldown = big_laser_cooldown - 1
+            big_laser_cooldown = big_laser_cooldown - delta_ms
 
         # --- MOVE THRAWN WITH ARROW KEYS ---
         # Only move if game is NOT over and we're playing!
@@ -451,9 +514,9 @@ async def main():
             keys = pygame.key.get_pressed()
 
             # How fast should Thrawn move? ZOOM if speed boost!
-            current_speed = thrawn_speed
+            current_speed = thrawn_speed * dt  # Multiply by delta time!
             if has_speed_boost:
-                current_speed = thrawn_speed * 3  # TRIPLE SPEED! ZOOM!
+                current_speed = thrawn_speed * 3 * dt  # TRIPLE SPEED! ZOOM!
 
             # Move left (but don't go off screen!)
             if keys[pygame.K_LEFT] and thrawn_x > 25:
@@ -483,14 +546,14 @@ async def main():
                     target_x = thrawn_x + 50 + (i // 2) * 40  # Right side
                 target_y = thrawn_y + 20  # Slightly behind Thrawn
 
-                # Smoothly move toward target position
-                wingman[0] = wingman[0] + (target_x - wingman[0]) * 0.01
-                wingman[1] = wingman[1] + (target_y - wingman[1]) * 0.01
+                # Smoothly move toward target position (use dt for smooth movement)
+                wingman[0] = wingman[0] + (target_x - wingman[0]) * 0.1 * dt
+                wingman[1] = wingman[1] + (target_y - wingman[1]) * 0.1 * dt
 
         # --- MOVE THE LASERS ---
         # Each laser flies UP the screen!
         for laser in lasers:
-            laser[1] = laser[1] - laser_speed  # Move up (subtract from y)
+            laser[1] = laser[1] - laser_speed * dt  # Move up (subtract from y)
 
         # Remove lasers that flew off the top of the screen
         # (We don't need them anymore - they're in outer space now!)
@@ -504,7 +567,7 @@ async def main():
         # The timer counts up, and when it's big enough, a new Zelda appears!
         # (Don't spawn new ones if game is over or on title screen!)
         if not game_over and game_state == "playing":
-            zelda_spawn_timer = zelda_spawn_timer + 1
+            zelda_spawn_timer = zelda_spawn_timer + delta_ms
         if zelda_spawn_timer >= zelda_spawn_rate and not game_over and game_state == "playing":
             # Time to spawn a new angry Zelda!
             new_zelda_x = random.randint(30, SCREEN_WIDTH - 30)  # Random spot (not too close to edges)
@@ -517,8 +580,8 @@ async def main():
         # --- MOVE THE ANGRY ZELDAS ---
         # Each Zelda flies DOWN and SIDEWAYS in a zigzag pattern!
         for zelda in zeldas:
-            zelda[1] = zelda[1] + zelda_speed  # Move down (add to y)
-            zelda[0] = zelda[0] + (zelda_side_speed * zelda[2])  # Move sideways!
+            zelda[1] = zelda[1] + zelda_speed * dt  # Move down (add to y)
+            zelda[0] = zelda[0] + (zelda_side_speed * zelda[2]) * dt  # Move sideways!
 
             # Bounce off the walls! If Zelda hits edge, reverse direction!
             if zelda[0] <= 30:  # Hit left wall?
@@ -537,7 +600,7 @@ async def main():
         # Every so often, each Zelda on screen throws a sword at Thrawn!
         # (Don't throw if game is over or on title screen!)
         if not game_over and game_state == "playing":
-            sword_timer = sword_timer + 1
+            sword_timer = sword_timer + delta_ms
         if sword_timer >= sword_rate and not game_over and game_state == "playing":
             # Time for Zeldas to throw swords!
             for zelda in zeldas:
@@ -551,7 +614,7 @@ async def main():
         # --- MOVE THE SWORDS ---
         # Each sword flies DOWN toward Thrawn!
         for sword in swords:
-            sword[1] = sword[1] + sword_speed  # Move down (add to y)
+            sword[1] = sword[1] + sword_speed * dt  # Move down (add to y)
 
         # Remove swords that flew off the bottom of the screen
         swords_to_keep = []
@@ -572,12 +635,12 @@ async def main():
         if boss_active and not game_over:
             # Fly down onto the screen first
             if boss_y < 80:
-                boss_y = boss_y + 0.05
+                boss_y = boss_y + 2 * dt
             else:
                 # --- STAR DESTROYER MOVEMENT ---
                 if boss_type == "star_destroyer":
                     # Move side to side once in position
-                    boss_x = boss_x + (boss_speed * boss_direction)
+                    boss_x = boss_x + (boss_speed * boss_direction * dt)
                     # Bounce off walls
                     if boss_x <= 150:
                         boss_direction = 1
@@ -587,7 +650,7 @@ async def main():
                 # --- MEGA ZELDA QUEEN MOVEMENT ---
                 elif boss_type == "zelda_queen":
                     # Bounces around crazily!
-                    boss_x = boss_x + (boss_speed * 1.5 * boss_direction)
+                    boss_x = boss_x + (boss_speed * 1.5 * boss_direction * dt)
                     if boss_x <= 100:
                         boss_direction = 1
                     if boss_x >= SCREEN_WIDTH - 100:
@@ -596,7 +659,7 @@ async def main():
                 # --- GIANT ROBOT MOVEMENT ---
                 elif boss_type == "giant_robot":
                     # Slow but menacing!
-                    boss_x = boss_x + (boss_speed * 0.5 * boss_direction)
+                    boss_x = boss_x + (boss_speed * 0.5 * boss_direction * dt)
                     if boss_x <= 150:
                         boss_direction = 1
                     if boss_x >= SCREEN_WIDTH - 150:
@@ -607,7 +670,7 @@ async def main():
                         robot_fist_x = boss_x
                         robot_fist_y = boss_y + 50
                     if robot_fist_active:
-                        robot_fist_y = robot_fist_y + 0.3  # Fist flies down!
+                        robot_fist_y = robot_fist_y + 6 * dt  # Fist flies down!
                         if robot_fist_y > SCREEN_HEIGHT + 50:
                             robot_fist_active = False
                             robot_fist_y = -100
@@ -615,19 +678,19 @@ async def main():
                 # --- SPACE DRAGON MOVEMENT ---
                 elif boss_type == "space_dragon":
                     # Swoops in circles!
-                    dragon_fire_timer = dragon_fire_timer + 0.02
+                    dragon_fire_timer = dragon_fire_timer + 0.03 * dt
                     boss_x = SCREEN_WIDTH // 2 + math.sin(dragon_fire_timer) * 350
                     boss_y = 100 + math.cos(dragon_fire_timer * 0.5) * 50
 
                 # --- SUPER DANCING 67 MOVEMENT ---
                 elif boss_type == "dancing_67":
                     # Dances around the screen!
-                    dance_angle = dance_angle + 0.03
+                    dance_angle = dance_angle + 0.05 * dt
                     boss_x = SCREEN_WIDTH // 2 + math.sin(dance_angle * 2) * 300
                     boss_y = 120 + math.sin(dance_angle * 3) * 40
 
             # Boss shoots attacks at Thrawn!
-            boss_shoot_timer = boss_shoot_timer + 1
+            boss_shoot_timer = boss_shoot_timer + delta_ms
             if boss_shoot_timer >= boss_shoot_rate and boss_y > 50:
                 if boss_type == "star_destroyer":
                     # Shoot 3 lasers in a spread pattern!
@@ -656,8 +719,8 @@ async def main():
 
         # Move boss lasers
         for laser in boss_lasers:
-            laser[1] = laser[1] + 0.4 * SPEED_MULT  # Move down
-            laser[0] = laser[0] + laser[2] * SPEED_MULT  # Move sideways based on angle
+            laser[1] = laser[1] + 7 * dt  # Move down
+            laser[0] = laser[0] + laser[2] * 15 * dt  # Move sideways based on angle
 
         # Remove boss lasers that went off screen
         boss_lasers_to_keep = []
@@ -668,14 +731,14 @@ async def main():
 
         # --- BOSS DEFEATED ANIMATION ---
         if boss_defeated:
-            boss_defeated_timer = boss_defeated_timer + 1
+            boss_defeated_timer = boss_defeated_timer + delta_ms
 
         # --- LEVEL COMPLETE! ---
         # After beating the boss, show message then go to next level!
         if level_complete:
-            level_complete_timer = level_complete_timer + 1
+            level_complete_timer = level_complete_timer + delta_ms
 
-            # After 3 seconds (3000 ticks), go to next level!
+            # After 3 seconds (3000ms), go to next level!
             if level_complete_timer > 3000:
                 # NEXT LEVEL!
                 level = level + 1
@@ -715,7 +778,7 @@ async def main():
 
                 # Make the game HARDER each level!
                 # Faster enemies, more swords, tougher boss!
-                zelda_speed = zelda_speed + 0.005  # Zeldas fly faster!
+                zelda_speed = zelda_speed + 0.2  # Zeldas fly faster!
                 zelda_spawn_rate = max(500, zelda_spawn_rate - 200)  # More Zeldas spawn!
                 sword_rate = max(500, sword_rate - 100)  # More swords thrown!
                 boss_max_health = boss_max_health + 5  # Boss has more health!
@@ -826,7 +889,7 @@ async def main():
         # Count down the explosion timers, remove old ones
         explosions_to_keep = []
         for explosion in explosions:
-            explosion[2] = explosion[2] - 1  # Count down the timer
+            explosion[2] = explosion[2] - delta_ms  # Count down the timer
             if explosion[2] > 0:  # If timer hasn't run out
                 explosions_to_keep.append(explosion)
         explosions = explosions_to_keep
@@ -905,7 +968,7 @@ async def main():
 
         # Update game over animation
         if game_over:
-            game_over_timer = game_over_timer + 1
+            game_over_timer = game_over_timer + delta_ms
             # After showing explosions for a while, allow going back to lobby
             if game_over_timer > 5000:
                 # Press any key to go back to lobby!
@@ -950,7 +1013,7 @@ async def main():
                     dance_angle = 0
 
                     # Reset difficulty back to normal
-                    zelda_speed = 0.01 * SPEED_MULT
+                    zelda_speed = 1.5  # Base speed at 60 FPS
                     zelda_spawn_rate = 2000
                     sword_rate = 1500
 
@@ -974,32 +1037,15 @@ async def main():
         # Fill the window with BLACK (like space!)
         window.fill((0, 0, 0))
 
-        # --- MOVE AND DRAW THE STARS ---
-        # Stars scroll down to make it feel like you're flying through space!
+        # --- DRAW THE STARS (OPTIMIZED!) ---
+        # Instead of drawing 150 circles, we blit one pre-rendered surface!
+        # Scroll the star surface down for parallax effect
+        star_scroll_y = star_scroll_y + 2 * dt
+        if star_scroll_y >= SCREEN_HEIGHT:
+            star_scroll_y = star_scroll_y - SCREEN_HEIGHT
 
-        # FAR STARS - tiny and slow (like really far away!)
-        for star in far_stars:
-            star[1] = star[1] + 0.02 * SPEED_MULT  # Move down slowly
-            if star[1] > SCREEN_HEIGHT:  # Wrap around to top
-                star[1] = 0
-                star[0] = random.randint(0, SCREEN_WIDTH)
-            pygame.draw.circle(window, (100, 100, 120), (int(star[0]), int(star[1])), 1)
-
-        # MEDIUM STARS - medium speed
-        for star in medium_stars:
-            star[1] = star[1] + 0.05 * SPEED_MULT  # Move down medium speed
-            if star[1] > SCREEN_HEIGHT:
-                star[1] = 0
-                star[0] = random.randint(0, SCREEN_WIDTH)
-            pygame.draw.circle(window, (180, 180, 200), (int(star[0]), int(star[1])), 2)
-
-        # CLOSE STARS - big and fast (zooming past!)
-        for star in close_stars:
-            star[1] = star[1] + 0.1 * SPEED_MULT  # Move down fast!
-            if star[1] > SCREEN_HEIGHT:
-                star[1] = 0
-                star[0] = random.randint(0, SCREEN_WIDTH)
-            pygame.draw.circle(window, (255, 255, 255), (int(star[0]), int(star[1])), 3)
+        # Blit the pre-rendered star surface (wrapping vertically)
+        window.blit(star_surface, (0, int(star_scroll_y) - SCREEN_HEIGHT))
 
         # --- DRAW THE TITLE SCREEN ---
         # Show the epic opening screen before the game starts!
@@ -1007,7 +1053,7 @@ async def main():
             # --- STAR DESTROYER in the background! ---
             # It floats at the top, looking menacing!
             title_boss_x = SCREEN_WIDTH // 2
-            title_boss_y = 120 + math.sin(title_timer / 500) * 10  # Gentle floating!
+            title_boss_y = 120 + math.sin(title_timer / 1000) * 10  # Gentle floating!
 
             # Main body - big gray triangle (like a Star Destroyer!)
             pygame.draw.polygon(window, (80, 80, 90), [
@@ -1032,7 +1078,7 @@ async def main():
             # --- ANGRY ZELDAS on the sides! ---
             # Left Zelda - bobbing up and down!
             zelda1_x = 200
-            zelda1_y = 350 + math.sin(title_timer / 300) * 20
+            zelda1_y = 350 + math.sin(title_timer / 600) * 20
 
             # Hair!
             hair_color = (180, 130, 50)
@@ -1058,7 +1104,7 @@ async def main():
 
             # Right Zelda - bobbing opposite!
             zelda2_x = SCREEN_WIDTH - 200
-            zelda2_y = 350 + math.cos(title_timer / 300) * 20
+            zelda2_y = 350 + math.cos(title_timer / 600) * 20
 
             # Hair!
             pygame.draw.line(window, hair_color, (zelda2_x - 20, zelda2_y), (zelda2_x - 25, zelda2_y + 60), 4)
@@ -1082,21 +1128,10 @@ async def main():
             pygame.draw.arc(window, (0, 0, 0), (zelda2_x - 10, zelda2_y + 5, 20, 10), 3.14, 6.28, 3)
 
             # --- THE GAME TITLE! ---
-            # "IN OUTSIDERELM" with a glowing effect!
-            # The glow pulses bigger and smaller!
-            glow_size = 3 + math.sin(title_timer / 200) * 2
-
-            # Draw glowing outline (draw title multiple times, slightly offset, in blue!)
-            title_text = big_font.render("IN OUTSIDERELM", True, (0, 100, 255))
-            for offset_x in range(-int(glow_size), int(glow_size) + 1):
-                for offset_y in range(-int(glow_size), int(glow_size) + 1):
-                    glow_text = big_font.render("IN OUTSIDERELM", True, (0, 50, 150))
-                    glow_rect = glow_text.get_rect(center=(SCREEN_WIDTH // 2 + offset_x, 280 + offset_y))
-                    window.blit(glow_text, glow_rect)
-
-            # Draw the main title in bright blue!
-            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 280))
-            window.blit(title_text, title_rect)
+            # "IN OUTSIDERELM" with a pre-rendered glowing effect!
+            # Just blit the pre-rendered glow surface (MUCH faster!)
+            title_rect = title_glow_surface.get_rect(center=(SCREEN_WIDTH // 2, 280))
+            window.blit(title_glow_surface, title_rect)
 
             # --- CONTROLS INFO ---
             controls1 = font.render("ARROW KEYS = Move", True, (200, 200, 200))
@@ -1109,7 +1144,7 @@ async def main():
 
             # --- PRESS ENTER TO GO TO SHOP! ---
             # This text blinks by changing visibility based on timer!
-            if (title_timer // 500) % 2 == 0:  # Blink every 500 ticks!
+            if (int(title_timer) // 500) % 2 == 0:  # Blink every 500ms!
                 start_text = medium_font.render("PRESS ENTER FOR SHOP!", True, (255, 255, 0))
                 start_rect = start_text.get_rect(center=(SCREEN_WIDTH // 2, 650))
                 window.blit(start_text, start_rect)
@@ -1514,20 +1549,9 @@ async def main():
         # --- DRAW LEVEL COMPLETE! ---
         # When you beat the boss, show an awesome message!
         if level_complete:
-            # Big glowing "LEVEL COMPLETE!" text!
-            glow = 3 + math.sin(level_complete_timer / 100) * 2
-
-            # Draw glow effect
-            for ox in range(-int(glow), int(glow) + 1):
-                for oy in range(-int(glow), int(glow) + 1):
-                    glow_text = big_font.render("LEVEL COMPLETE!", True, (0, 100, 0))
-                    glow_rect = glow_text.get_rect(center=(400 + ox, 250 + oy))
-                    window.blit(glow_text, glow_rect)
-
-            # Main text in bright green!
-            complete_text = big_font.render("LEVEL COMPLETE!", True, (0, 255, 0))
-            complete_rect = complete_text.get_rect(center=(SCREEN_WIDTH // 2, 250))
-            window.blit(complete_text, complete_rect)
+            # Use pre-rendered glow surface (MUCH faster!)
+            complete_rect = level_complete_surface.get_rect(center=(SCREEN_WIDTH // 2, 250))
+            window.blit(level_complete_surface, complete_rect)
 
             # Show what level is next!
             next_text = medium_font.render("Get ready for LEVEL " + str(level + 1) + "!", True, (255, 255, 0))
@@ -1580,8 +1604,8 @@ async def main():
             if game_over_timer > 200:
                 for i in range(5):
                     stink_x = thrawn_x - 40 + (i * 20)
-                    wave = math.sin(game_over_timer / 100 + i) * 10
-                    stink_y = thrawn_y - (game_over_timer / 10) - (i * 30)
+                    wave = math.sin(game_over_timer / 200 + i) * 10
+                    stink_y = thrawn_y - (game_over_timer / 20) - (i * 30)
                     if stink_y > 50:
                         pygame.draw.line(window, (100, 150, 50),
                                        (stink_x + wave, stink_y),
@@ -1653,8 +1677,10 @@ async def main():
         # Show everything on screen
         pygame.display.flip()
 
-        # Control game speed - 60 FPS for smooth, consistent gameplay!
-        clock.tick(FPS)
+        # Control game speed - only use clock.tick on desktop
+        # On web, the browser handles timing via requestAnimationFrame
+        if not IS_WEB:
+            clock.tick(FPS)
 
     # Turn off Pygame when done
     pygame.quit()
