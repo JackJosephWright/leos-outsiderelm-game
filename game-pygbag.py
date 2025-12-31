@@ -116,7 +116,7 @@ pygame.display.set_caption("In Outsiderelm")
 # --- THRAWN THE HERO ---
 # Thrawn starts at the bottom center of the screen
 thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
-thrawn_y = SCREEN_HEIGHT - 100  # Near the bottom
+thrawn_y = SCREEN_HEIGHT // 2  # Middle of screen (so you don't drift!)
 thrawn_speed = 5  # How fast Thrawn moves in pixels per frame at 60 FPS
 
 # --- REALISTIC SPACE PHYSICS! ---
@@ -315,8 +315,8 @@ camera_x = 0
 camera_y = 0
 
 # Player position in the WORLD (not screen!)
-player_world_x = 600  # Start near Earth!
-player_world_y = 600
+player_world_x = 500  # Start ON Earth!
+player_world_y = 500
 player_walk_speed = 4  # Walking speed
 player_run_speed = 8   # Running speed (hold SHIFT)
 
@@ -325,13 +325,13 @@ player_run_speed = 8   # Running speed (hold SHIFT)
 # [x, y, name, color, size, discovered, has_zeldas, has_food, has_materials]
 planets = [
     [500, 500, "Earth", (50, 150, 50), 80, True, True, True, True],       # Starting planet (discovered)
-    [1500, 800, "Mars", (200, 80, 50), 60, False, True, False, True],     # Red planet
-    [2500, 400, "Ice World", (150, 200, 255), 70, False, True, True, False],  # Cold planet
-    [3000, 2000, "Jungle", (30, 180, 30), 90, False, True, True, True],   # Green planet
-    [800, 2500, "Desert", (220, 180, 100), 65, False, True, False, True], # Sandy planet
-    [2000, 3200, "Ocean", (50, 100, 200), 85, False, False, True, False], # Water planet
-    [3500, 1200, "Volcano", (180, 50, 30), 55, False, True, False, True], # Fire planet
-    [1200, 1800, "Moon Base", (180, 180, 180), 40, False, False, False, True],  # Small moon
+    [2500, 1500, "Mars", (200, 80, 50), 60, False, True, False, True],     # Red planet - FAR!
+    [4500, 800, "Ice World", (150, 200, 255), 70, False, True, True, False],  # Cold planet - VERY FAR!
+    [5500, 3500, "Jungle", (30, 180, 30), 90, False, True, True, True],   # Green planet - SUPER FAR!
+    [1500, 4000, "Desert", (220, 180, 100), 65, False, True, False, True], # Sandy planet - FAR!
+    [3500, 5500, "Ocean", (50, 100, 200), 85, False, False, True, False], # Water planet - VERY FAR!
+    [6000, 2000, "Volcano", (180, 50, 30), 55, False, True, False, True], # Fire planet - SUPER FAR!
+    [2000, 3000, "Moon Base", (180, 180, 180), 40, False, False, False, True],  # Small moon - FAR!
 ]
 
 # Current planet (which planet are we battling on?)
@@ -357,6 +357,15 @@ planet_explore_y = 0
 buildings = []
 BASE_COST = 50  # Materials needed to build a base
 TURRET_COST = 30  # Materials needed to build a turret
+
+# --- TURRET SHOOTING! ---
+# Turrets shoot at enemies automatically!
+turret_lasers = []  # Each laser is [x, y, dx, dy] - position and direction
+turret_shoot_timer = 0  # Timer for when turrets shoot
+
+# --- ACTIVE TURRETS ON SCREEN! ---
+# Turrets that appear during battle! Each is [x, y, health]
+active_turrets = []  # Gets filled based on buildings when playing
 
 # --- PLANET MATERIALS! ---
 # Materials scattered on the planet surface
@@ -481,6 +490,7 @@ async def main():
     global on_planet, planet_explore_x, planet_explore_y, planet_materials, buildings
     global planet_food, current_user, username_input, leaderboard
     global velocity_x, velocity_y
+    global turret_lasers, turret_shoot_timer, active_turrets
 
     # Track time for delta calculations
     last_time = pygame.time.get_ticks()
@@ -577,7 +587,8 @@ async def main():
                     print("Landed on " + current_planet_name + "!")
 
             # --- ON PLANET CONTROLS! ---
-            if event.type == pygame.KEYDOWN and game_state == "on_planet":
+            # Use elif so landing and returning don't happen in same frame!
+            elif event.type == pygame.KEYDOWN and game_state == "on_planet":
                 # V key = take shuttle back to space!
                 if event.key == pygame.K_v:
                     on_planet = False
@@ -960,6 +971,169 @@ async def main():
                 swords_to_keep.append(sword)
         swords = swords_to_keep
 
+        # --- TURRETS ON PLANETS SHOOT AT ENEMIES! ---
+        # Turrets you built on planets will help you fight!
+        if not game_over and game_state == "playing":
+            turret_shoot_timer = turret_shoot_timer + delta_ms
+
+            # Turrets shoot every 1.5 seconds
+            shoot_rate = 1500
+
+            if turret_shoot_timer >= shoot_rate:
+                # Check each building - if it's a turret and on screen, shoot!
+                for building in buildings:
+                    if building[3] == "turret":
+                        # Find which planet this turret is on
+                        turret_planet = None
+                        for planet in planets:
+                            if planet[2] == building[0]:  # Match planet name
+                                turret_planet = planet
+                                break
+
+                        if turret_planet is not None:
+                            # Get planet's screen position
+                            planet_screen_x = turret_planet[0] - camera_x
+                            planet_screen_y = turret_planet[1] - camera_y
+
+                            # Only shoot if planet is on screen!
+                            if planet_screen_x > -100 and planet_screen_x < SCREEN_WIDTH + 100:
+                                if planet_screen_y > -100 and planet_screen_y < SCREEN_HEIGHT + 100:
+                                    # Find a target (zelda or boss!)
+                                    target = None
+
+                                    # First try to target the boss if there is one!
+                                    if boss_active and boss_x > 0 and boss_x < SCREEN_WIDTH:
+                                        target = [boss_x, boss_y]
+
+                                    # Otherwise target a random zelda!
+                                    elif len(zeldas) > 0:
+                                        target = random.choice(zeldas)
+
+                                    # If we found a target, shoot at it!
+                                    if target is not None:
+                                        # Turret laser comes from the planet!
+                                        start_x = planet_screen_x
+                                        start_y = planet_screen_y
+
+                                        # Calculate direction to target
+                                        dx = target[0] - start_x
+                                        dy = target[1] - start_y
+                                        dist = max(1, (dx * dx + dy * dy) ** 0.5)
+
+                                        # Normalize and set speed
+                                        turret_speed = 8
+                                        dx = (dx / dist) * turret_speed
+                                        dy = (dy / dist) * turret_speed
+
+                                        # Create the turret laser! [x, y, dx, dy]
+                                        turret_lasers.append([start_x, start_y, dx, dy])
+
+                turret_shoot_timer = 0
+
+        # --- TURRETS GET HIT BY ENEMY WEAPONS! ---
+        # Swords can destroy turrets on visible planets!
+        buildings_to_remove = []
+        for building in buildings:
+            if building[3] == "turret":
+                # Find which planet this turret is on
+                turret_planet = None
+                for planet in planets:
+                    if planet[2] == building[0]:
+                        turret_planet = planet
+                        break
+
+                if turret_planet is not None:
+                    # Get planet's screen position
+                    planet_screen_x = turret_planet[0] - camera_x
+                    planet_screen_y = turret_planet[1] - camera_y
+
+                    # Only check hits if planet is on screen
+                    if planet_screen_x > -100 and planet_screen_x < SCREEN_WIDTH + 100:
+                        if planet_screen_y > -100 and planet_screen_y < SCREEN_HEIGHT + 100:
+                            # Initialize health if not set (old turrets)
+                            if len(building) < 5:
+                                building.append(3)  # Add health = 3
+
+                            # Check if hit by swords
+                            for sword in swords:
+                                dist = ((planet_screen_x - sword[0]) ** 2 + (planet_screen_y - sword[1]) ** 2) ** 0.5
+                                if dist < 50:
+                                    building[4] = building[4] - 1  # Lose health!
+                                    if sword in swords:
+                                        swords.remove(sword)
+                                    explosions.append([int(planet_screen_x), int(planet_screen_y), 0])
+                                    if building[4] <= 0:
+                                        buildings_to_remove.append(building)
+                                        print("A turret on " + building[0] + " was destroyed!")
+                                    break
+
+                            # Check if hit by boss lasers
+                            for blaser in boss_lasers:
+                                dist = ((planet_screen_x - blaser[0]) ** 2 + (planet_screen_y - blaser[1]) ** 2) ** 0.5
+                                if dist < 50:
+                                    building[4] = building[4] - 1  # Lose health!
+                                    if blaser in boss_lasers:
+                                        boss_lasers.remove(blaser)
+                                    explosions.append([int(planet_screen_x), int(planet_screen_y), 0])
+                                    if building[4] <= 0:
+                                        buildings_to_remove.append(building)
+                                        print("A turret on " + building[0] + " was destroyed!")
+                                    break
+
+        # Remove destroyed turrets
+        for building in buildings_to_remove:
+            if building in buildings:
+                buildings.remove(building)
+
+        # --- MOVE TURRET LASERS ---
+        for laser in turret_lasers:
+            laser[0] = laser[0] + laser[2] * dt  # Move x
+            laser[1] = laser[1] + laser[3] * dt  # Move y
+
+        # Remove turret lasers that went off screen
+        turret_lasers_to_keep = []
+        for laser in turret_lasers:
+            if laser[1] > -50 and laser[1] < SCREEN_HEIGHT + 50:
+                if laser[0] > -50 and laser[0] < SCREEN_WIDTH + 50:
+                    turret_lasers_to_keep.append(laser)
+        turret_lasers = turret_lasers_to_keep
+
+        # --- TURRET LASERS HIT ENEMIES! ---
+        # Check if turret lasers hit zeldas!
+        zeldas_hit = []
+        lasers_used = []
+        for laser in turret_lasers:
+            for zelda in zeldas:
+                # Check distance between laser and zelda
+                dist = ((laser[0] - zelda[0]) ** 2 + (laser[1] - zelda[1]) ** 2) ** 0.5
+                if dist < 35:  # Hit!
+                    if zelda not in zeldas_hit:
+                        zeldas_hit.append(zelda)
+                    if laser not in lasers_used:
+                        lasers_used.append(laser)
+                    score = score + 5  # Bonus points for turret kills!
+
+        # Remove hit zeldas and used lasers
+        for zelda in zeldas_hit:
+            if zelda in zeldas:
+                zeldas.remove(zelda)
+                # Add explosion!
+                explosions.append([zelda[0], zelda[1], 0])
+        for laser in lasers_used:
+            if laser in turret_lasers:
+                turret_lasers.remove(laser)
+
+        # Check if turret lasers hit the boss!
+        if boss_active:
+            for laser in turret_lasers:
+                dist = ((laser[0] - boss_x) ** 2 + (laser[1] - boss_y) ** 2) ** 0.5
+                if dist < 60:  # Hit the boss!
+                    boss_health = boss_health - 1
+                    if laser in turret_lasers:
+                        turret_lasers.remove(laser)
+                    # Add small explosion
+                    explosions.append([laser[0], laser[1], 0])
+
         # --- TREASURE CHESTS! ---
         # Spawn chests periodically during gameplay!
         if not game_over and game_state == "playing":
@@ -1172,24 +1346,25 @@ async def main():
         if level_complete:
             level_complete_timer = level_complete_timer + delta_ms
 
-            # After 3 seconds (3000ms), return to space to explore more planets!
+            # After 3 seconds (3000ms), go to the SHOP!
             if level_complete_timer > 3000:
-                # PLANET CLEARED! Back to space exploration!
+                # PLANET CLEARED! Time to shop!
                 level = level + 1  # You've beaten more planets!
                 level_complete = False
                 level_complete_timer = 0
                 boss_defeated = False
                 boss_defeated_timer = 0
 
-                # Go back to exploring space!
-                game_state = "playing"
+                # Go to the SHOP after beating a boss!
+                game_state = "shop"
+                shop_selection = 0
                 # Center camera on player
                 camera_x = player_world_x - SCREEN_WIDTH // 2
                 camera_y = player_world_y - SCREEN_HEIGHT // 2
 
                 # Reset Thrawn to starting position for next battle
                 thrawn_x = SCREEN_WIDTH // 2
-                thrawn_y = SCREEN_HEIGHT - 100
+                thrawn_y = SCREEN_HEIGHT // 2
 
                 # Clear any remaining stuff
                 lasers = []
@@ -1321,14 +1496,26 @@ async def main():
                 swords = []
                 boss_lasers = []
 
-        # --- BOSS LASERS HIT THRAWN? ---
-        # Check if boss's green lasers hit the player!
+        # --- BOSS LASERS HIT PLAYER? ---
+        # Check if boss's green lasers hit the player (astronaut or ship)!
         boss_lasers_to_remove = []
         for laser in boss_lasers:
-            distance_x = abs(laser[0] - thrawn_x)
-            distance_y = abs(laser[1] - thrawn_y)
+            # Use astronaut position when on planet, ship position in space!
+            if on_planet:
+                player_hit_x = planet_explore_x
+                player_hit_y = planet_explore_y
+                hit_range_x = 20  # Smaller hitbox for astronaut
+                hit_range_y = 25
+            else:
+                player_hit_x = thrawn_x
+                player_hit_y = thrawn_y
+                hit_range_x = 25  # Normal hitbox for ship
+                hit_range_y = 30
 
-            if distance_x < 25 and distance_y < 30:
+            distance_x = abs(laser[0] - player_hit_x)
+            distance_y = abs(laser[1] - player_hit_y)
+
+            if distance_x < hit_range_x and distance_y < hit_range_y:
                 boss_lasers_to_remove.append(laser)
                 # SHIELD CHECK! Does the shield block it?
                 if shield_hits > 0:
@@ -1336,7 +1523,7 @@ async def main():
                     print("Shield blocked! " + str(shield_hits) + " shields left!")
                 else:
                     lives = lives - 1  # No shield? Lose a life!
-                explosions.append([thrawn_x, thrawn_y, 300])
+                explosions.append([int(player_hit_x), int(player_hit_y), 300])
 
         for laser in boss_lasers_to_remove:
             if laser in boss_lasers:
@@ -1366,14 +1553,24 @@ async def main():
                 explosions_to_keep.append(explosion)
         explosions = explosions_to_keep
 
-        # --- ZELDA HITS THRAWN? OUCH! ---
-        # Check if any Zelda crashed into Thrawn!
+        # --- ZELDA HITS PLAYER? OUCH! ---
+        # Check if any Zelda crashed into player (astronaut or ship)!
         for zelda in zeldas:
-            distance_x = abs(zelda[0] - thrawn_x)
-            distance_y = abs(zelda[1] - thrawn_y)
+            # Use astronaut position when on planet, ship position in space!
+            if on_planet:
+                player_hit_x = planet_explore_x
+                player_hit_y = planet_explore_y
+                hit_range = 30  # Smaller hitbox for astronaut
+            else:
+                player_hit_x = thrawn_x
+                player_hit_y = thrawn_y
+                hit_range = 40  # Normal hitbox for ship
 
-            # If Zelda is close to Thrawn = OUCH!
-            if distance_x < 40 and distance_y < 40:
+            distance_x = abs(zelda[0] - player_hit_x)
+            distance_y = abs(zelda[1] - player_hit_y)
+
+            # If Zelda is close to player = OUCH!
+            if distance_x < hit_range and distance_y < hit_range:
                 zeldas.remove(zelda)  # Remove the Zelda
                 # SHIELD CHECK! Does the shield block it?
                 if shield_hits > 0:
@@ -1381,18 +1578,30 @@ async def main():
                     print("Shield blocked! " + str(shield_hits) + " shields left!")
                 else:
                     lives = lives - 1  # No shield? Lose a life!
-                # Make an explosion where Thrawn got hit!
-                explosions.append([thrawn_x, thrawn_y, 300])
+                # Make an explosion where player got hit!
+                explosions.append([int(player_hit_x), int(player_hit_y), 300])
 
-        # --- SWORD HITS THRAWN? OUCH! ---
-        # Check if any sword stabbed Thrawn!
+        # --- SWORD HITS PLAYER? OUCH! ---
+        # Check if any sword hit the player (astronaut on planet or ship in space)!
         swords_to_remove = []
         for sword in swords:
-            distance_x = abs(sword[0] - thrawn_x)
-            distance_y = abs(sword[1] - thrawn_y)
+            # Use astronaut position when on planet, ship position in space!
+            if on_planet:
+                player_hit_x = planet_explore_x
+                player_hit_y = planet_explore_y
+                hit_range_x = 20  # Smaller hitbox for astronaut
+                hit_range_y = 25
+            else:
+                player_hit_x = thrawn_x
+                player_hit_y = thrawn_y
+                hit_range_x = 25  # Normal hitbox for ship
+                hit_range_y = 30
 
-            # If sword is close to Thrawn = STABBED!
-            if distance_x < 25 and distance_y < 30:
+            distance_x = abs(sword[0] - player_hit_x)
+            distance_y = abs(sword[1] - player_hit_y)
+
+            # If sword is close to player = HIT!
+            if distance_x < hit_range_x and distance_y < hit_range_y:
                 swords_to_remove.append(sword)  # Remove the sword
                 # SHIELD CHECK! Does the shield block it?
                 if shield_hits > 0:
@@ -1400,8 +1609,8 @@ async def main():
                     print("Shield blocked! " + str(shield_hits) + " shields left!")
                 else:
                     lives = lives - 1  # No shield? Lose a life!
-                # Make an explosion where Thrawn got hit!
-                explosions.append([thrawn_x, thrawn_y, 300])
+                # Make an explosion where player got hit!
+                explosions.append([int(player_hit_x), int(player_hit_y), 300])
 
         # Remove swords that hit Thrawn
         for sword in swords_to_remove:
@@ -1476,7 +1685,7 @@ async def main():
 
                     # Reset Thrawn position
                     thrawn_x = SCREEN_WIDTH // 2
-                    thrawn_y = SCREEN_HEIGHT - 100
+                    thrawn_y = SCREEN_HEIGHT // 2
 
                     # Clear all enemies and projectiles
                     lasers = []
@@ -1628,6 +1837,15 @@ async def main():
                 land_text = medium_font.render("Press V to land on " + near_planet[2], True, (255, 255, 0))
                 land_rect = land_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
                 window.blit(land_text, land_rect)
+
+            # Show turret count if you have turrets!
+            turret_count = 0
+            for building in buildings:
+                if building[3] == "turret":
+                    turret_count = turret_count + 1
+            if turret_count > 0:
+                turret_text = font.render("Turrets: " + str(turret_count), True, (100, 255, 100))
+                window.blit(turret_text, (SCREEN_WIDTH - 120, 10))
 
         # --- DRAW PLANET SURFACE! ---
         if game_state == "on_planet":
@@ -1971,6 +2189,55 @@ async def main():
                 pygame.draw.rect(window, (0, 200, 255), (laser[0] - 3, laser[1], 6, 25))
             else:
                 pygame.draw.rect(window, (255, 0, 0), (laser[0] - 2, laser[1], 4, 15))
+
+        # --- DRAW TURRET LASERS! ---
+        # Green lasers from your turrets!
+        for laser in turret_lasers:
+            lx = int(laser[0])
+            ly = int(laser[1])
+            # Draw a glowing green laser
+            pygame.draw.circle(window, (100, 255, 100), (lx, ly), 6)  # Outer glow
+            pygame.draw.circle(window, (200, 255, 200), (lx, ly), 3)  # Inner bright
+
+        # --- DRAW TURRETS ON PLANETS! ---
+        # Turrets show on planets when visible on screen!
+        for building in buildings:
+            if building[3] == "turret":
+                # Find which planet this turret is on
+                for planet in planets:
+                    if planet[2] == building[0]:
+                        # Get planet's screen position
+                        px = int(planet[0] - camera_x)
+                        py = int(planet[1] - camera_y)
+                        planet_size = planet[4]
+
+                        # Only draw if on screen
+                        if px > -100 and px < SCREEN_WIDTH + 100:
+                            if py > -100 and py < SCREEN_HEIGHT + 100:
+                                # Draw turret on top of planet
+                                tx = px
+                                ty = py - planet_size - 15  # Above the planet
+
+                                # Get health (default 3 if not set)
+                                health = building[4] if len(building) > 4 else 3
+
+                                # Turret base
+                                pygame.draw.rect(window, (80, 80, 80), (tx - 12, ty + 8, 24, 8))
+
+                                # Turret body (green)
+                                pygame.draw.rect(window, (50, 150, 50), (tx - 8, ty - 5, 16, 15))
+
+                                # Turret cannon
+                                pygame.draw.rect(window, (30, 100, 30), (tx - 3, ty - 15, 6, 12))
+
+                                # Turret dome
+                                pygame.draw.circle(window, (100, 200, 100), (tx, ty), 8)
+
+                                # Health bars
+                                for i in range(health):
+                                    health_color = (50, 255, 50) if health == 3 else (255, 255, 0) if health == 2 else (255, 50, 50)
+                                    pygame.draw.rect(window, health_color, (tx - 10 + (i * 8), ty + 18, 6, 3))
+                        break
 
         # --- DRAW HOMING MISSILES! ---
         # Orange missiles that track enemies!
