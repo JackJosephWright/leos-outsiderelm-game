@@ -279,14 +279,12 @@ title_timer = 0  # Timer for cool animations on title screen!
 shop_selection = 0  # Which item you're looking at (0, 1, 2, etc.)
 
 # Power-up prices (how many coins each one costs!)
-SPEED_BOOST_PRICE = 350      # Makes Thrawn go faster! (more expensive now!)
 SHIELD_PRICE = 300           # Protects you from 1 hit!
 FAST_SHOOTING_PRICE = 250    # Shoot lasers super fast!
 BIG_LASER_PRICE = 500        # MEGA destruction beam!
 WINGMAN_PRICE = 400          # A buddy ship that fights with you!
 
 # What power-ups does the player have for this game?
-has_speed_boost = False      # Did you buy speed boost?
 has_shield = False           # Do you have a shield?
 shield_hits = 0              # How many hits can your shield take?
 has_fast_shooting = False    # Did you buy fast shooting?
@@ -323,7 +321,6 @@ homing_missiles = []  # Each missile is [x, y, target_zelda]
 
 # Shop items list (for drawing the shop)
 shop_items = [
-    {"name": "SPEED BOOST", "price": SPEED_BOOST_PRICE, "desc": "Thrawn goes ZOOM!", "color": (0, 255, 255)},
     {"name": "SHIELD", "price": SHIELD_PRICE, "desc": "Bubble protects you!", "color": (100, 200, 255)},
     {"name": "FAST SHOOTING", "price": FAST_SHOOTING_PRICE, "desc": "Pew pew pew pew!", "color": (255, 100, 100)},
     {"name": "BIG LASER", "price": BIG_LASER_PRICE, "desc": "MEGA BEAM!", "color": (255, 255, 0)},
@@ -342,7 +339,7 @@ running = True
 
 async def main():
     global running, game_state, title_timer, shop_selection, coins
-    global has_speed_boost, has_shield, shield_hits, has_fast_shooting, has_big_laser
+    global has_shield, shield_hits, has_fast_shooting, has_big_laser
     global wingmen, wingmen_count, thrawn_x, thrawn_y, lasers, shoot_cooldown
     global big_laser_active, big_laser_timer, big_laser_cooldown
     global zeldas, zelda_spawn_timer, swords, sword_timer
@@ -420,14 +417,6 @@ async def main():
                             else:
                                 wx = thrawn_x + 50 + (i // 2) * 40  # Right side
                             wingmen.append([wx, thrawn_y])
-
-                    # Try to buy SPEED BOOST!
-                    elif selected_item["name"] == "SPEED BOOST":
-                        if coins >= SPEED_BOOST_PRICE and not has_speed_boost:
-                            coins = coins - SPEED_BOOST_PRICE
-                            has_speed_boost = True
-                            save_coins(coins)
-                            print("Bought SPEED BOOST!")
 
                     # Try to buy SHIELD!
                     elif selected_item["name"] == "SHIELD":
@@ -553,10 +542,8 @@ async def main():
             # Check which keys are being pressed right now
             keys = pygame.key.get_pressed()
 
-            # How fast should Thrawn move? ZOOM if speed boost!
+            # How fast should Thrawn move?
             current_speed = thrawn_speed * dt  # Multiply by delta time!
-            if has_speed_boost:
-                current_speed = thrawn_speed * 3 * dt  # TRIPLE SPEED! ZOOM!
 
             # Move left (but don't go off screen!)
             if keys[pygame.K_LEFT] and thrawn_x > 25:
@@ -1210,7 +1197,6 @@ async def main():
                     level_complete_timer = 0
 
                     # Reset ALL power-ups for next game!
-                    has_speed_boost = False
                     has_shield = False
                     shield_hits = 0
                     has_fast_shooting = False
@@ -1392,10 +1378,7 @@ async def main():
                     window.blit(price_text, (shop_left + 600, y_pos))
 
                     # Show if you already own it!
-                    if item["name"] == "SPEED BOOST" and has_speed_boost:
-                        owned_text = font.render("OWNED!", True, (0, 255, 0))
-                        window.blit(owned_text, (shop_left + 600, y_pos + 30))
-                    elif item["name"] == "FAST SHOOTING" and has_fast_shooting:
+                    if item["name"] == "FAST SHOOTING" and has_fast_shooting:
                         owned_text = font.render("OWNED!", True, (0, 255, 0))
                         window.blit(owned_text, (shop_left + 600, y_pos + 30))
                     elif item["name"] == "BIG LASER" and has_big_laser:
@@ -1743,31 +1726,6 @@ async def main():
             # Red glowing eyes!
             pygame.draw.circle(window, (255, 0, 0), (thrawn_x - 8, thrawn_y), 5)  # Left eye
             pygame.draw.circle(window, (255, 0, 0), (thrawn_x + 8, thrawn_y), 5)  # Right eye
-
-            # Speed boost effect! Draw flames behind Thrawn when boosted!
-            if has_speed_boost:
-                # Orange/yellow flames coming out the back!
-                pygame.draw.polygon(window, (255, 150, 0), [
-                    (thrawn_x - 10, thrawn_y + 20),
-                    (thrawn_x - 15, thrawn_y + 35 + random.randint(0, 10)),
-                    (thrawn_x - 5, thrawn_y + 20)
-                ])
-                pygame.draw.polygon(window, (255, 150, 0), [
-                    (thrawn_x + 5, thrawn_y + 20),
-                    (thrawn_x + 15, thrawn_y + 35 + random.randint(0, 10)),
-                    (thrawn_x + 10, thrawn_y + 20)
-                ])
-                # Yellow centers
-                pygame.draw.polygon(window, (255, 255, 0), [
-                    (thrawn_x - 8, thrawn_y + 20),
-                    (thrawn_x - 10, thrawn_y + 28 + random.randint(0, 5)),
-                    (thrawn_x - 6, thrawn_y + 20)
-                ])
-                pygame.draw.polygon(window, (255, 255, 0), [
-                    (thrawn_x + 6, thrawn_y + 20),
-                    (thrawn_x + 10, thrawn_y + 28 + random.randint(0, 5)),
-                    (thrawn_x + 8, thrawn_y + 20)
-                ])
 
         # --- DRAW THE WINGMEN ---
         # Your fleet of buddy ships that fight alongside Thrawn!
