@@ -1297,6 +1297,27 @@ async def main():
                     boss_x = SCREEN_WIDTH // 2 + math.sin(dance_angle * 2) * 300
                     boss_y = 120 + math.sin(dance_angle * 3) * 40
 
+                # --- MEGA WORM MOVEMENT ---
+                elif boss_type == "mega_worm":
+                    # Slithers like a snake across the screen!
+                    dragon_fire_timer = dragon_fire_timer + 0.04 * dt
+                    boss_x = SCREEN_WIDTH // 2 + math.sin(dragon_fire_timer * 1.5) * 400
+                    boss_y = 80 + math.sin(dragon_fire_timer * 3) * 30
+
+                # --- DEATH STAR MOVEMENT ---
+                elif boss_type == "death_star":
+                    # Slow and menacing, hovers in the center!
+                    boss_x = SCREEN_WIDTH // 2 + math.sin(dragon_fire_timer * 0.3) * 100
+                    boss_y = 100
+                    dragon_fire_timer = dragon_fire_timer + 0.02 * dt
+
+                # --- THE BUGGER MOVEMENT ---
+                elif boss_type == "the_bugger":
+                    # Erratic bug movement - jumps around!
+                    dance_angle = dance_angle + 0.08 * dt
+                    boss_x = SCREEN_WIDTH // 2 + math.sin(dance_angle * 4) * 350
+                    boss_y = 100 + abs(math.sin(dance_angle * 6)) * 60
+
             # Boss shoots attacks at Thrawn!
             boss_shoot_timer = boss_shoot_timer + delta_ms
             if boss_shoot_timer >= boss_shoot_rate and boss_y > 50:
@@ -1323,6 +1344,24 @@ async def main():
                     for i in range(8):
                         angle = -0.4 + i * 0.1
                         boss_lasers.append([boss_x, boss_y + 30, angle])
+                elif boss_type == "mega_worm":
+                    # Spits acid in waves!
+                    for i in range(5):
+                        angle = -0.2 + i * 0.1
+                        boss_lasers.append([boss_x, boss_y + 30, angle])
+                    # Also spawns mini zeldas!
+                    if random.randint(0, 100) < 30:
+                        zeldas.append([boss_x, boss_y + 50, random.choice([-1, 1])])
+                elif boss_type == "death_star":
+                    # SUPER LASER! One massive beam that spreads!
+                    for i in range(12):
+                        angle = -0.6 + i * 0.1
+                        boss_lasers.append([boss_x, boss_y + 60, angle])
+                elif boss_type == "the_bugger":
+                    # Shoots bug spit everywhere chaotically!
+                    for i in range(6):
+                        angle = random.uniform(-0.5, 0.5)
+                        boss_lasers.append([boss_x + random.randint(-50, 50), boss_y + 40, angle])
                 boss_shoot_timer = 0
 
         # Move boss lasers
@@ -1379,14 +1418,17 @@ async def main():
                 score = 0  # Reset score for next planet battle
                 lives = 3  # Fresh lives for next planet!
 
-                # Reset difficulty for next planet
-                zelda_speed = 1.5
-                zelda_spawn_rate = 2000
-                sword_rate = 1500
+                # Reset difficulty for next planet - ZELDAS GET STRONGER!
+                zelda_speed = 1.5 + (level * 0.2)  # Faster each level!
+                zelda_spawn_rate = max(800, 2000 - (level * 150))  # Spawn faster!
+                sword_rate = max(500, 1500 - (level * 100))  # Throw swords faster!
                 boss_max_health = 20 + (level * 5)  # Harder on each planet!
 
                 # Cycle through different bosses based on level!
-                boss_types = ["star_destroyer", "zelda_queen", "giant_robot", "space_dragon", "dancing_67"]
+                # Level 1: Star Destroyer, 2: Zelda Queen, 3: Giant Robot,
+                # 4: Space Dragon, 5: Dancing 67, 6: Mega Worm,
+                # 7: Death Star, 8: The Bugger (giant bug!)
+                boss_types = ["star_destroyer", "zelda_queen", "giant_robot", "space_dragon", "dancing_67", "mega_worm", "death_star", "the_bugger"]
                 boss_type = boss_types[(level - 1) % len(boss_types)]
 
 
@@ -2458,6 +2500,89 @@ async def main():
                 text_rect = text_67.get_rect(center=(bx, by))
                 window.blit(text_67, text_rect)
                 boss_name = "SUPER DANCING 67"
+
+            # === MEGA WORM ===
+            elif boss_type == "mega_worm":
+                # Long segmented worm body!
+                worm_color = (100, 180, 60)  # Green worm
+                # Draw segments
+                for i in range(8):
+                    seg_x = bx - i * 25 + math.sin(dragon_fire_timer * 2 + i * 0.5) * 10
+                    seg_y = by + math.sin(dragon_fire_timer * 3 + i * 0.3) * 5
+                    seg_size = 25 - i * 2
+                    pygame.draw.circle(window, worm_color, (int(seg_x), int(seg_y)), seg_size)
+                    pygame.draw.circle(window, (80, 140, 40), (int(seg_x), int(seg_y)), seg_size, 3)
+                # Worm head (bigger!)
+                pygame.draw.circle(window, worm_color, (bx + 20, by), 35)
+                pygame.draw.circle(window, (80, 140, 40), (bx + 20, by), 35, 4)
+                # Angry eyes
+                pygame.draw.circle(window, (255, 255, 0), (bx + 10, by - 10), 10)
+                pygame.draw.circle(window, (255, 255, 0), (bx + 30, by - 10), 10)
+                pygame.draw.circle(window, (0, 0, 0), (bx + 12, by - 8), 5)
+                pygame.draw.circle(window, (0, 0, 0), (bx + 32, by - 8), 5)
+                # Big scary mouth!
+                pygame.draw.arc(window, (200, 0, 0), (bx, by + 5, 40, 25), 3.14, 6.28, 5)
+                # Fangs!
+                pygame.draw.polygon(window, (255, 255, 255), [(bx + 5, by + 15), (bx + 10, by + 30), (bx + 15, by + 15)])
+                pygame.draw.polygon(window, (255, 255, 255), [(bx + 25, by + 15), (bx + 30, by + 30), (bx + 35, by + 15)])
+                boss_name = "MEGA WORM"
+
+            # === DEATH STAR ===
+            elif boss_type == "death_star":
+                # Big gray sphere!
+                pygame.draw.circle(window, (120, 120, 130), (bx, by), 80)
+                pygame.draw.circle(window, (90, 90, 100), (bx, by), 80, 5)
+                # Surface details (lines)
+                pygame.draw.line(window, (80, 80, 90), (bx - 80, by), (bx + 80, by), 3)
+                pygame.draw.arc(window, (80, 80, 90), (bx - 80, by - 40, 160, 80), 0, 3.14, 2)
+                # The super laser dish!
+                pygame.draw.circle(window, (60, 60, 70), (bx - 30, by - 20), 30)
+                pygame.draw.circle(window, (40, 40, 50), (bx - 30, by - 20), 25)
+                pygame.draw.circle(window, (100, 200, 100), (bx - 30, by - 20), 15)
+                # Charging effect when about to shoot!
+                if boss_shoot_timer > boss_shoot_rate - 200:
+                    pygame.draw.circle(window, (150, 255, 150), (bx - 30, by - 20), 20)
+                    pygame.draw.circle(window, (200, 255, 200), (bx - 30, by - 20), 12)
+                # Surface trenches
+                pygame.draw.line(window, (70, 70, 80), (bx - 60, by + 30), (bx + 60, by + 30), 2)
+                pygame.draw.line(window, (70, 70, 80), (bx - 50, by + 50), (bx + 50, by + 50), 2)
+                boss_name = "DEATH STAR"
+
+            # === THE BUGGER ===
+            elif boss_type == "the_bugger":
+                # Giant bug body!
+                bug_color = (80, 50, 30)  # Brown bug
+                # Abdomen (back part)
+                pygame.draw.ellipse(window, bug_color, (bx - 60, by, 80, 50))
+                pygame.draw.ellipse(window, (60, 40, 20), (bx - 60, by, 80, 50), 3)
+                # Stripes on abdomen
+                for i in range(4):
+                    pygame.draw.line(window, (100, 70, 40), (bx - 50 + i * 20, by + 5), (bx - 50 + i * 20, by + 45), 2)
+                # Thorax (middle)
+                pygame.draw.ellipse(window, bug_color, (bx - 20, by - 15, 50, 40))
+                # Head
+                pygame.draw.circle(window, bug_color, (bx + 40, by), 25)
+                # Creepy bug eyes (big and red!)
+                pygame.draw.circle(window, (200, 0, 0), (bx + 30, by - 10), 15)
+                pygame.draw.circle(window, (200, 0, 0), (bx + 50, by - 10), 15)
+                pygame.draw.circle(window, (0, 0, 0), (bx + 32, by - 10), 8)
+                pygame.draw.circle(window, (0, 0, 0), (bx + 52, by - 10), 8)
+                # Antennae
+                pygame.draw.line(window, bug_color, (bx + 35, by - 20), (bx + 20, by - 50), 4)
+                pygame.draw.line(window, bug_color, (bx + 45, by - 20), (bx + 60, by - 50), 4)
+                # Creepy legs!
+                for i in range(3):
+                    leg_y = by + 10 + i * 12
+                    # Left legs
+                    pygame.draw.line(window, bug_color, (bx - 30, leg_y), (bx - 80, leg_y + 30), 4)
+                    pygame.draw.line(window, bug_color, (bx - 80, leg_y + 30), (bx - 90, leg_y + 50), 3)
+                    # Right legs
+                    pygame.draw.line(window, bug_color, (bx + 10, leg_y), (bx + 60, leg_y + 30), 4)
+                    pygame.draw.line(window, bug_color, (bx + 60, leg_y + 30), (bx + 70, leg_y + 50), 3)
+                # Mandibles!
+                pygame.draw.line(window, (60, 40, 20), (bx + 55, by + 5), (bx + 75, by + 20), 5)
+                pygame.draw.line(window, (60, 40, 20), (bx + 55, by + 10), (bx + 75, by + 25), 5)
+                boss_name = "THE BUGGER"
 
             # --- BOSS HEALTH BAR (for all bosses!) ---
             if boss_active:
