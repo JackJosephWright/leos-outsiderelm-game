@@ -87,3 +87,49 @@ After each piece, we run the game and see if it works!
 - Claude will ask permission before writing code
 - Progress is saved in git commits
 - Leo can type his ideas and Claude will help translate them into code
+
+---
+
+## Web Deployment (GitHub Pages)
+
+### How to Deploy
+```bash
+# 1. Build for web
+/Users/wright_family/Library/Python/3.9/bin/pygbag --build game.py
+
+# 2. Copy web files to root
+cp -r build/web/* .
+
+# 3. Commit and push
+git add -A && git commit -m "Rebuild web" && git push
+```
+
+### Website URL
+https://jackjosephwright.github.io/leos-outsiderelm-game/
+
+### IMPORTANT: Fixing "Old Version" Bug
+
+If the website shows an old version after deploying:
+
+**Problem 1: main.py out of sync**
+- Pygbag uses `main.py` - it must match `game.py`!
+- Fix: `cp game.py main.py` then rebuild
+
+**Problem 2: Browser caching**
+- Add cache busting to `index.html`:
+- Find: `leos-outsiderelm-game.apk`
+- Replace with: `leos-outsiderelm-game.apk?v=NUMBER` (increment the number each time)
+- Or use: `sed -i '' 's/\.apk/.apk?v=3/g' index.html`
+
+**Problem 3: Old build files**
+- Clean rebuild:
+```bash
+rm -rf build/web *.apk
+mkdir -p build/web
+/Users/wright_family/Library/Python/3.9/bin/pygbag --build game.py
+```
+
+**Testing:**
+- Hard refresh: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
+- Or add `?nocache=123` to the URL
+- Or test in incognito/private window
