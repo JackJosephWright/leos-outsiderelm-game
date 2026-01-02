@@ -72,32 +72,46 @@ def play_random_song():
 # Start playing a random song!
 play_random_song()
 
-# --- COINS (SAVED POINTS!) ---
-# This is your wallet! Coins save even when you close the game!
-save_file = "save_data.json"  # The file where we save your coins!
+# --- COINS (ROGUELIKE MODE!) ---
+# No saving between runs! See how far you can get!
+save_file = "save_data.json"  # Only saves skins, not progress!
+STARTING_COINS = 100  # Everyone starts with 100 coins each run!
 
-# Function to load coins from the save file!
-def load_coins():
-    # Try to open the save file and read the coins
+# Function to load skin data from save file!
+def load_skins():
     if os.path.exists(save_file):
         try:
             with open(save_file, "r") as f:
                 data = json.load(f)
-                return data.get("coins", 0)  # Get coins, or 0 if not found
+                saved_skin = data.get("current_skin", "thrawn")
+                saved_owned = data.get("owned_skins", ["thrawn"])
+                return saved_skin, saved_owned
         except:
-            return 0  # If something goes wrong, start with 0
-    return 0  # No save file? Start with 0 coins!
+            return "thrawn", ["thrawn"]
+    return "thrawn", ["thrawn"]
 
-# Function to save coins to the save file!
-def save_coins(coins_to_save):
-    data = {"coins": coins_to_save}
+# No save_coins function anymore - roguelike mode!
+
+# Function to save skin data!
+def save_skins(skin_name, owned_list):
+    # Load existing data first so we don't lose coin info!
+    existing_data = {}
+    if os.path.exists(save_file):
+        try:
+            with open(save_file, "r") as f:
+                existing_data = json.load(f)
+        except:
+            pass
+    # Update with skin info
+    existing_data["current_skin"] = skin_name
+    existing_data["owned_skins"] = owned_list
     with open(save_file, "w") as f:
-        json.dump(data, f)
-    print("Saved " + str(coins_to_save) + " coins!")
+        json.dump(existing_data, f)
+    print("Saved skin: " + skin_name)
 
-# Load our coins when the game starts!
-coins = load_coins()
-print("You have " + str(coins) + " coins!")
+# Start with base coins - roguelike mode!
+coins = STARTING_COINS
+print("ROGUELIKE MODE! Starting with " + str(coins) + " coins!")
 
 # Set up an event for when the music ends so we can play another!
 SONG_END = pygame.USEREVENT + 1
@@ -118,6 +132,59 @@ pygame.display.set_caption("In Outsiderelm")
 thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
 thrawn_y = SCREEN_HEIGHT // 2  # Middle of screen (so you don't drift!)
 thrawn_speed = 5  # How fast Thrawn moves in pixels per frame at 60 FPS
+
+# --- SKINS! ---
+# Different character skins like Fortnite!
+current_skin = "thrawn"  # Which skin is equipped
+owned_skins = ["thrawn"]  # Skins you own (start with default)
+skin_shop_selection = 0  # Which skin is selected in skin shop
+
+# Load saved skin data!
+loaded_skin, loaded_owned = load_skins()
+current_skin = loaded_skin
+owned_skins = loaded_owned
+print("Loaded skin: " + current_skin)
+
+# All available skins with prices and colors!
+all_skins = [
+    {"name": "thrawn", "display": "THRAWN", "price": 0, "owned": True,
+     "desc": "The original hero!", "colors": {"body": (70, 130, 180), "accent": (50, 100, 150)}},
+    {"name": "ender", "display": "ENDER WIGGIN", "price": 500, "owned": False,
+     "desc": "Battle School commander!", "colors": {"body": (40, 80, 40), "accent": (60, 120, 60)}},
+    {"name": "robot", "display": "ROBOT X-9", "price": 750, "owned": False,
+     "desc": "Chrome combat machine!", "colors": {"body": (150, 150, 160), "accent": (100, 100, 110)}},
+    {"name": "ninja", "display": "SHADOW NINJA", "price": 600, "owned": False,
+     "desc": "Silent and deadly!", "colors": {"body": (30, 30, 40), "accent": (80, 0, 0)}},
+    {"name": "alien", "display": "ALIEN HUNTER", "price": 800, "owned": False,
+     "desc": "From another world!", "colors": {"body": (0, 180, 100), "accent": (0, 220, 150)}},
+    {"name": "fire", "display": "FIRE KING", "price": 1000, "owned": False,
+     "desc": "Burns with power!", "colors": {"body": (200, 80, 0), "accent": (255, 150, 0)}},
+    {"name": "ice", "display": "ICE QUEEN", "price": 1000, "owned": False,
+     "desc": "Frozen warrior!", "colors": {"body": (100, 180, 255), "accent": (200, 230, 255)}},
+    {"name": "gold", "display": "GOLDEN LEGEND", "price": 2000, "owned": False,
+     "desc": "The ultimate flex!", "colors": {"body": (255, 200, 0), "accent": (255, 230, 100)}},
+    {"name": "custom", "display": "CUSTOM SKIN", "price": 100, "owned": False,
+     "desc": "Draw your own!", "colors": {"body": (255, 100, 100), "accent": (255, 200, 100)}},
+]
+
+# Custom skin drawing data!
+custom_skin_pixels = []  # List of [x, y, color] for each pixel drawn
+drawing_color = (255, 0, 0)  # Current drawing color (red default)
+drawing_colors = [
+    (255, 0, 0),    # Red
+    (255, 128, 0),  # Orange
+    (255, 255, 0),  # Yellow
+    (0, 255, 0),    # Green
+    (0, 255, 255),  # Cyan
+    (0, 0, 255),    # Blue
+    (255, 0, 255),  # Purple
+    (255, 255, 255),# White
+    (0, 0, 0),      # Black
+    (139, 69, 19),  # Brown (skin)
+    (255, 200, 150),# Peach (skin)
+    (128, 128, 128),# Gray
+]
+drawing_color_index = 0
 
 # --- REALISTIC SPACE PHYSICS! ---
 # In space, things keep moving (momentum!)
@@ -305,6 +372,16 @@ game_state = "signin"  # Start with sign in!
 title_timer = 0  # Timer for cool animations on title screen!
 username_input = ""  # What the player is typing for their name
 
+# Story ending variables!
+story_ending_timer = 0  # Timer for story ending animations
+story_page = 0  # Which page of the story we're on
+
+# --- LOBBY SYSTEM! ---
+# After every level or death, you come back here!
+lobby_selection = 0  # Which option is selected in lobby (0=Continue, 1=Shop, etc.)
+lobby_reason = "level"  # Why we're in lobby: "level" (beat boss) or "death" (died)
+quit_confirm = False  # Need to confirm before quitting!
+
 # --- SPACE EXPLORATION! ---
 # The big space world you can explore!
 WORLD_WIDTH = 4000   # How big is space? (4000 pixels wide)
@@ -338,10 +415,48 @@ planets = [
 current_planet = None
 current_planet_name = "Space"
 
+# --- PLANET ECONOMIES! ---
+# Each planet has its own food supply and production!
+# Runs in the background even when you're not there!
+planet_economy = {}
+for p in planets:
+    planet_economy[p[2]] = {
+        "food_supply": 50 if p[7] else 0,  # Start with 50 food if planet has food
+        "materials_supply": 0,
+        "last_update": 0,  # Track time for production
+    }
+
+# Economy rates (per second)
+FOOD_PER_FARMER = 2      # Each farmer produces 2 food/sec
+FOOD_PER_VILLAGER = 0.5  # Each villager eats 0.5 food/sec
+FOOD_ON_LANDING = 30     # Max food you can take when landing
+
 # --- INVENTORY! ---
 # What you've collected!
 food = 100  # Start with some food (decreases over time!)
 materials = 0  # For building bases
+
+# --- CIVILIZATION RESOURCES! ---
+# Different types of materials for building your city!
+wood = 0      # From trees - for houses
+stone = 0     # From rocks - for strong buildings
+iron = 0      # From metal - for weapons and armor
+gold = 0      # Rare! - for fancy buildings and trade
+
+# --- POPULATION! ---
+# Villagers from destroyed worlds come to your planets!
+population = 0  # Total villagers across all your planets
+villagers = []  # Each villager is [planet_name, x, y, job, happiness]
+# Jobs: "homeless", "farmer", "miner", "soldier", "banker", "builder", "shopkeeper"
+
+# --- ARMY! ---
+# Soldiers that fight alongside you!
+soldiers = 0     # How many soldiers you have
+army_power = 0   # Total fighting strength of your army
+
+# --- REFUGEES! ---
+# When you destroy enemies, sometimes refugees escape and join you!
+refugees_waiting = 0  # Refugees waiting to land on a planet
 
 # --- SHUTTLE! ---
 # Your shuttle to travel to planets!
@@ -351,12 +466,75 @@ on_planet = False  # Are we landed on a planet?
 planet_explore_x = 0  # Where are we on the planet surface?
 planet_explore_y = 0
 
-# --- BASES AND TURRETS! ---
+# --- BASES AND BUILDINGS! ---
 # Things you've built on planets!
-# Each base is [planet_name, x, y, type] where type is "base" or "turret"
+# Each building is [planet_name, x, y, type, health(optional)]
 buildings = []
-BASE_COST = 50  # Materials needed to build a base
-TURRET_COST = 30  # Materials needed to build a turret
+building_menu_open = False  # Press TAB to see all buildings!
+building_menu_scroll = 0    # Scroll position in menu
+
+# --- BUILDING INTERIORS! ---
+# When you enter a building, you can do stuff inside!
+inside_building = None  # Which building we're inside [planet, x, y, type]
+inside_menu_selection = 0  # Which option is selected inside
+
+# Farm stuff
+farm_crops = []  # Crops growing: [building_x, building_y, growth_stage, crop_type]
+
+# Bank stuff
+bank_balance = 0  # Coins stored in bank (earns interest!)
+
+# Market prices (fluctuate!)
+market_prices = {
+    "wood": 2,      # Coins per wood
+    "stone": 3,     # Coins per stone
+    "iron": 5,      # Coins per iron
+    "gold": 10,     # Coins per gold
+    "food": 1,      # Coins per food
+}
+
+# Building costs! (in materials)
+BASE_COST = 50       # Base - unlocks more buildings!
+TURRET_COST = 30     # Turret - shoots at enemies
+FACTORY_COST = 100   # Robot Factory - spawns helper robots (need wingmen!)
+BANK_COST = 75       # Bank - generates coins over time
+FARM_COST = 60       # Farm - generates food over time
+SHIELD_GEN_COST = 80 # Shield Generator - gives shield when you land
+MINER_COST = 70      # Auto Miner - automatically collects materials
+HOSPITAL_COST = 90   # Hospital - gives extra life when you land
+RADAR_COST = 50      # Radar - shows enemy warning arrows
+SHIPYARD_COST = 120  # Shipyard - upgrades your ship!
+
+# --- CIVILIZATION BUILDINGS! ---
+HOUSE_COST = 20        # House - villagers live here (need wood!)
+HOUSE_WOOD = 10        # Wood needed for a house
+SPACEPORT_COST = 150   # Space Port - dock your fleet ships!
+SPACEPORT_IRON = 30    # Iron needed for space port
+MARKET_COST = 40       # Farmers Market - trade materials for coins!
+MARKET_WOOD = 15       # Wood needed for market
+BARRACKS_COST = 80     # Barracks - train soldiers for your army!
+BARRACKS_IRON = 20     # Iron needed for barracks
+TAVERN_COST = 35       # Tavern - makes villagers happy!
+TAVERN_WOOD = 10       # Wood needed for tavern
+WAREHOUSE_COST = 45    # Warehouse - stores extra materials!
+WAREHOUSE_WOOD = 20    # Wood needed for warehouse
+
+# Max workers per building!
+MAX_WORKERS_PER_BUILDING = 3  # Only 3 villagers can work at each building
+
+# Building timers for generating stuff!
+bank_timer = 0       # Timer for banks generating coins
+farm_timer = 0       # Timer for farms generating food
+miner_timer = 0      # Timer for miners collecting materials
+
+# Shipyard upgrades!
+ship_damage_level = 1    # How much damage lasers do (1 = normal)
+ship_speed_level = 1     # How fast ship moves (1 = normal)
+ship_fire_rate_level = 1 # How fast you can shoot (1 = normal)
+
+# Robot helpers from factory!
+helper_robots = []  # List of [x, y, target_x, target_y, shoot_timer]
+factory_spawn_timer = 0  # Timer for spawning robots from factories
 
 # --- TURRET SHOOTING! ---
 # Turrets shoot at enemies automatically!
@@ -456,6 +634,7 @@ shop_items = [
     {"name": "FAST SHOOTING", "price": FAST_SHOOTING_PRICE, "desc": "Pew pew pew pew!", "color": (255, 100, 100)},
     {"name": "BIG LASER", "price": BIG_LASER_PRICE, "desc": "MEGA BEAM!", "color": (255, 255, 0)},
     {"name": "WINGMAN", "price": WINGMAN_PRICE, "desc": "Buddy ship fights with you!", "color": (0, 255, 100)},
+    {"name": "SKINS", "price": 0, "desc": "Change your look!", "color": (255, 100, 255)},
     {"name": "START GAME!", "price": 0, "desc": "Let's GO!", "color": (255, 255, 255)},
 ]
 
@@ -485,12 +664,23 @@ async def main():
     global chests, chest_spawn_timer, has_spread_shot, has_homing_missiles
     global has_piercing_laser, has_double_points, double_points_timer, homing_missiles
     global camera_x, camera_y, player_world_x, player_world_y
-    global planets, current_planet, current_planet_name, near_planet
+    global planets, current_planet, current_planet_name, near_planet, planet_economy
     global food, materials, shuttle_cooldown
+    global wood, stone, iron, gold
+    global population, villagers, soldiers, army_power, refugees_waiting
     global on_planet, planet_explore_x, planet_explore_y, planet_materials, buildings
     global planet_food, current_user, username_input, leaderboard
     global velocity_x, velocity_y
     global turret_lasers, turret_shoot_timer, active_turrets
+    global current_skin, owned_skins, skin_shop_selection, all_skins
+    global factory_spawn_timer, helper_robots
+    global custom_skin_pixels, drawing_color, drawing_color_index
+    global story_ending_timer, story_page
+    global bank_timer, farm_timer, miner_timer
+    global ship_damage_level, ship_speed_level, ship_fire_rate_level
+    global lobby_selection, lobby_reason, quit_confirm
+    global building_menu_open, building_menu_scroll
+    global inside_building, inside_menu_selection, farm_crops, bank_balance, market_prices
 
     # Track time for delta calculations
     last_time = pygame.time.get_ticks()
@@ -571,10 +761,11 @@ async def main():
                     # Spawn materials on the planet!
                     planet_materials = []
                     if near_planet[8]:  # Has materials?
-                        for i in range(15):  # 15 materials to collect!
+                        for i in range(20):  # 20 materials to collect!
                             mx = random.randint(100, SCREEN_WIDTH - 100)
                             my = random.randint(100, SCREEN_HEIGHT - 100)
-                            mtype = random.choice(["crystal", "metal", "rock"])
+                            # Different planets have different resources!
+                            mtype = random.choice(["crystal", "metal", "rock", "wood", "stone", "wood", "stone"])
                             planet_materials.append([mx, my, mtype])
                     # Spawn food on the planet!
                     planet_food = []
@@ -586,30 +777,695 @@ async def main():
                             planet_food.append([fx, fy, ftype])
                     print("Landed on " + current_planet_name + "!")
 
+                    # --- FOOD FROM PLANET SURPLUS! ---
+                    # If the planet has extra food, take some for your ship!
+                    if current_planet_name in planet_economy:
+                        planet_food_supply = planet_economy[current_planet_name]["food_supply"]
+                        if planet_food_supply > 20:  # Only take if surplus exists
+                            food_to_take = min(FOOD_ON_LANDING, planet_food_supply - 20)  # Leave 20 for villagers
+                            food_to_take = min(food_to_take, 100 - food)  # Don't overfill ship
+                            if food_to_take > 0:
+                                planet_economy[current_planet_name]["food_supply"] -= food_to_take
+                                food = food + food_to_take
+                                print("Resupplied " + str(int(food_to_take)) + " food from planet!")
+                        elif planet_food_supply < 10:
+                            print("WARNING: Planet food supply low! (" + str(int(planet_food_supply)) + ")")
+
+                    # Check for building bonuses when landing!
+                    for b in buildings:
+                        if b[0] == current_planet_name:
+                            # Shield Generator gives a shield!
+                            if b[3] == "shield_gen":
+                                shield_hits = shield_hits + 1
+                                has_shield = True
+                                print("Shield Generator activated! +" + str(shield_hits) + " shields!")
+                            # Hospital gives extra life!
+                            if b[3] == "hospital":
+                                lives = lives + 1
+                                print("Hospital healed you! Lives: " + str(lives))
+                            # Shipyard upgrades your ship!
+                            if b[3] == "shipyard":
+                                # Cycle through upgrades
+                                if ship_damage_level < 3:
+                                    ship_damage_level = ship_damage_level + 1
+                                    print("Shipyard upgraded DAMAGE to level " + str(ship_damage_level) + "!")
+                                elif ship_speed_level < 3:
+                                    ship_speed_level = ship_speed_level + 1
+                                    print("Shipyard upgraded SPEED to level " + str(ship_speed_level) + "!")
+                                elif ship_fire_rate_level < 3:
+                                    ship_fire_rate_level = ship_fire_rate_level + 1
+                                    print("Shipyard upgraded FIRE RATE to level " + str(ship_fire_rate_level) + "!")
+                                else:
+                                    print("Ship fully upgraded!")
+
+                    # REFUGEES settle in houses on this planet!
+                    if refugees_waiting > 0:
+                        # Count houses on this planet
+                        houses_here = 0
+                        villagers_here = 0
+                        for b in buildings:
+                            if b[0] == current_planet_name and b[3] == "house":
+                                houses_here = houses_here + 1
+                        for v in villagers:
+                            if v[0] == current_planet_name:
+                                villagers_here = villagers_here + 1
+                        # Each house can hold 4 villagers
+                        space = (houses_here * 4) - villagers_here
+                        if space > 0:
+                            settling = min(refugees_waiting, space)
+                            for i in range(settling):
+                                vx = random.randint(100, SCREEN_WIDTH - 100)
+                                vy = random.randint(100, SCREEN_HEIGHT - 100)
+                                villagers.append([current_planet_name, vx, vy, "homeless", 50])
+                                population = population + 1
+                            refugees_waiting = refugees_waiting - settling
+                            print(str(settling) + " refugees settled! Population: " + str(population))
+
             # --- ON PLANET CONTROLS! ---
             # Use elif so landing and returning don't happen in same frame!
             elif event.type == pygame.KEYDOWN and game_state == "on_planet":
+                # Count buildings on this planet for tier system!
+                has_base = False
+                turret_count = 0
+                for b in buildings:
+                    if b[0] == current_planet_name:
+                        if b[3] == "base":
+                            has_base = True
+                        if b[3] == "turret":
+                            turret_count = turret_count + 1
+
+                # TAB key = toggle building menu!
+                if event.key == pygame.K_TAB:
+                    building_menu_open = not building_menu_open
+                    building_menu_scroll = 0
+                    if building_menu_open:
+                        print("Building menu opened!")
+                    else:
+                        print("Building menu closed!")
+
+                # If menu is open, UP/DOWN scrolls it
+                if building_menu_open:
+                    if event.key == pygame.K_UP:
+                        building_menu_scroll = max(0, building_menu_scroll - 1)
+                    if event.key == pygame.K_DOWN:
+                        building_menu_scroll = min(12, building_menu_scroll + 1)  # 13 buildings total
+                    # ESC or TAB closes menu
+                    if event.key == pygame.K_ESCAPE:
+                        building_menu_open = False
+
                 # V key = take shuttle back to space!
-                if event.key == pygame.K_v:
+                if event.key == pygame.K_v and not building_menu_open:
                     on_planet = False
                     game_state = "playing"
+                    building_menu_open = False
                     print("Returned to space!")
+
+                # --- DEBUG MODE! (F1) ---
+                # Press F1 to get lots of resources for testing!
+                if event.key == pygame.K_F1:
+                    materials = materials + 500
+                    wood = wood + 200
+                    stone = stone + 200
+                    iron = iron + 100
+                    gold = gold + 50
+                    coins = coins + 1000
+                    refugees_waiting = refugees_waiting + 20
+                    food = 100
+                    print("=== DEBUG MODE ===")
+                    print("Added: 500 materials, 200 wood, 200 stone, 100 iron, 50 gold")
+                    print("Added: 1000 coins, 20 refugees, full food!")
+                    print("==================")
+
+                # 0 key = Spawn villagers directly on this planet
+                if event.key == pygame.K_0:
+                    for i in range(10):
+                        vx = random.randint(100, SCREEN_WIDTH - 100)
+                        vy = random.randint(100, SCREEN_HEIGHT - 100)
+                        villagers.append([current_planet_name, vx, vy, "homeless", 50, 0, 0])
+                        population = population + 1
+                    print("Spawned 10 villagers! Population: " + str(population))
+
+                # F3 = Build all buildings at once!
+                if event.key == pygame.K_F3:
+                    bx, by = planet_explore_x, planet_explore_y
+                    buildings.append([current_planet_name, bx, by, "base"])
+                    buildings.append([current_planet_name, bx + 80, by, "farm"])
+                    buildings.append([current_planet_name, bx - 80, by, "bank"])
+                    buildings.append([current_planet_name, bx, by + 80, "barracks"])
+                    buildings.append([current_planet_name, bx, by - 80, "market"])
+                    buildings.append([current_planet_name, bx + 80, by + 80, "house"])
+                    buildings.append([current_planet_name, bx - 80, by + 80, "house"])
+                    buildings.append([current_planet_name, bx + 80, by - 80, "miner"])
+                    buildings.append([current_planet_name, bx - 80, by - 80, "factory"])
+                    print("=== DEBUG: Built all buildings! ===")
+
+                # F4 = Max out army
+                if event.key == pygame.K_F4:
+                    soldiers = soldiers + 50
+                    army_power = army_power + 500
+                    print("=== DEBUG: Added 50 soldiers! Army power: " + str(army_power) + " ===")
+
                 # B key = build a BASE!
                 if event.key == pygame.K_b:
-                    if materials >= BASE_COST:
+                    if has_base:
+                        print("Already have a base on this planet!")
+                    elif materials >= BASE_COST:
                         materials = materials - BASE_COST
                         buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "base"])
-                        print("Built a BASE on " + current_planet_name + "!")
+                        print("Built a BASE! You can now build more buildings!")
                     else:
-                        print("Need " + str(BASE_COST) + " materials to build a base!")
+                        print("Need " + str(BASE_COST) + " materials!")
+
                 # T key = build a TURRET!
                 if event.key == pygame.K_t:
-                    if materials >= TURRET_COST:
+                    max_turrets = 3 if has_base else 1
+                    if turret_count >= max_turrets:
+                        if has_base:
+                            print("Max 3 turrets per planet!")
+                        else:
+                            print("Build a BASE first to get more turrets!")
+                    elif materials >= TURRET_COST:
                         materials = materials - TURRET_COST
                         buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "turret"])
-                        print("Built a TURRET on " + current_planet_name + "!")
+                        print("Built TURRET! (" + str(turret_count + 1) + "/" + str(max_turrets) + ")")
                     else:
-                        print("Need " + str(TURRET_COST) + " materials to build a turret!")
+                        print("Need " + str(TURRET_COST) + " materials!")
+
+                # F key = build a FARM!
+                if event.key == pygame.K_f:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= FARM_COST:
+                        materials = materials - FARM_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "farm"])
+                        print("Built a FARM! Generates food over time!")
+                    else:
+                        print("Need " + str(FARM_COST) + " materials!")
+
+                # K key = build a BANK!
+                if event.key == pygame.K_k:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= BANK_COST:
+                        materials = materials - BANK_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "bank"])
+                        print("Built a BANK! Generates coins over time!")
+                    else:
+                        print("Need " + str(BANK_COST) + " materials!")
+
+                # R key = build a ROBOT FACTORY!
+                if event.key == pygame.K_r:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= FACTORY_COST:
+                        materials = materials - FACTORY_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "factory"])
+                        print("Built ROBOT FACTORY! (Needs wingmen to deploy robots)")
+                    else:
+                        print("Need " + str(FACTORY_COST) + " materials!")
+
+                # G key = build a SHIELD GENERATOR!
+                if event.key == pygame.K_g:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= SHIELD_GEN_COST:
+                        materials = materials - SHIELD_GEN_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "shield_gen"])
+                        print("Built SHIELD GENERATOR! Get shields when you land!")
+                    else:
+                        print("Need " + str(SHIELD_GEN_COST) + " materials!")
+
+                # M key = build an AUTO MINER!
+                if event.key == pygame.K_m:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= MINER_COST:
+                        materials = materials - MINER_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "miner"])
+                        print("Built AUTO MINER! Collects materials automatically!")
+                    else:
+                        print("Need " + str(MINER_COST) + " materials!")
+
+                # H key = build a HOSPITAL!
+                if event.key == pygame.K_h:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= HOSPITAL_COST:
+                        materials = materials - HOSPITAL_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "hospital"])
+                        print("Built HOSPITAL! Get extra life when you land!")
+                    else:
+                        print("Need " + str(HOSPITAL_COST) + " materials!")
+
+                # D key = build a RADAR!
+                if event.key == pygame.K_d:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= RADAR_COST:
+                        materials = materials - RADAR_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "radar"])
+                        print("Built RADAR! Shows enemy warnings!")
+                    else:
+                        print("Need " + str(RADAR_COST) + " materials!")
+
+                # Y key = build a SHIPYARD!
+                if event.key == pygame.K_y:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= SHIPYARD_COST:
+                        materials = materials - SHIPYARD_COST
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "shipyard"])
+                        print("Built SHIPYARD! Upgrades your ship!")
+                    else:
+                        print("Need " + str(SHIPYARD_COST) + " materials!")
+
+                # --- CIVILIZATION BUILDINGS! ---
+                # Q key = build a HOUSE (for villagers!)
+                if event.key == pygame.K_q:
+                    if materials >= HOUSE_COST and wood >= HOUSE_WOOD:
+                        materials = materials - HOUSE_COST
+                        wood = wood - HOUSE_WOOD
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "house"])
+                        print("Built HOUSE! Villagers can live here!")
+                    elif wood < HOUSE_WOOD:
+                        print("Need " + str(HOUSE_WOOD) + " wood!")
+                    else:
+                        print("Need " + str(HOUSE_COST) + " materials!")
+
+                # P key = build a SPACE PORT!
+                if event.key == pygame.K_p:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= SPACEPORT_COST and iron >= SPACEPORT_IRON:
+                        materials = materials - SPACEPORT_COST
+                        iron = iron - SPACEPORT_IRON
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "spaceport"])
+                        print("Built SPACE PORT! Your fleet can dock here!")
+                    elif iron < SPACEPORT_IRON:
+                        print("Need " + str(SPACEPORT_IRON) + " iron!")
+                    else:
+                        print("Need " + str(SPACEPORT_COST) + " materials!")
+
+                # E key = build a MARKET!
+                if event.key == pygame.K_e:
+                    if materials >= MARKET_COST and wood >= MARKET_WOOD:
+                        materials = materials - MARKET_COST
+                        wood = wood - MARKET_WOOD
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "market"])
+                        print("Built FARMERS MARKET! Trade for coins!")
+                    elif wood < MARKET_WOOD:
+                        print("Need " + str(MARKET_WOOD) + " wood!")
+                    else:
+                        print("Need " + str(MARKET_COST) + " materials!")
+
+                # X key = build BARRACKS (train soldiers!)
+                if event.key == pygame.K_x:
+                    if not has_base:
+                        print("Need a BASE first!")
+                    elif materials >= BARRACKS_COST and iron >= BARRACKS_IRON:
+                        materials = materials - BARRACKS_COST
+                        iron = iron - BARRACKS_IRON
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "barracks"])
+                        print("Built BARRACKS! Train soldiers here!")
+                    elif iron < BARRACKS_IRON:
+                        print("Need " + str(BARRACKS_IRON) + " iron!")
+                    else:
+                        print("Need " + str(BARRACKS_COST) + " materials!")
+
+                # C key = build TAVERN!
+                if event.key == pygame.K_c:
+                    if materials >= TAVERN_COST and wood >= TAVERN_WOOD:
+                        materials = materials - TAVERN_COST
+                        wood = wood - TAVERN_WOOD
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "tavern"])
+                        print("Built TAVERN! Villagers get happier here!")
+                    elif wood < TAVERN_WOOD:
+                        print("Need " + str(TAVERN_WOOD) + " wood!")
+                    else:
+                        print("Need " + str(TAVERN_COST) + " materials!")
+
+                # Z key = build WAREHOUSE!
+                if event.key == pygame.K_z:
+                    if materials >= WAREHOUSE_COST and wood >= WAREHOUSE_WOOD:
+                        materials = materials - WAREHOUSE_COST
+                        wood = wood - WAREHOUSE_WOOD
+                        buildings.append([current_planet_name, planet_explore_x, planet_explore_y, "warehouse"])
+                        print("Built WAREHOUSE! Store extra stuff!")
+                    elif wood < WAREHOUSE_WOOD:
+                        print("Need " + str(WAREHOUSE_WOOD) + " wood!")
+                    else:
+                        print("Need " + str(WAREHOUSE_COST) + " materials!")
+
+                # ENTER = Enter a building!
+                if event.key == pygame.K_RETURN:
+                    # Check if near any building
+                    for b in buildings:
+                        if b[0] == current_planet_name:
+                            dist = ((planet_explore_x - b[1]) ** 2 + (planet_explore_y - b[2]) ** 2) ** 0.5
+                            if dist < 50:  # Close enough to enter!
+                                building_type = b[3]
+                                # Only some buildings can be entered
+                                if building_type in ["farm", "bank", "market", "barracks", "house", "tavern", "warehouse", "hospital"]:
+                                    inside_building = [current_planet_name, b[1], b[2], building_type]
+                                    inside_menu_selection = 0
+                                    game_state = "inside_building"
+                                    print("Entered " + building_type.upper() + "!")
+                                else:
+                                    print("Can't enter this building!")
+                                break
+
+                # --- JOB ASSIGNMENTS (Number Keys!) ---
+                # Helper function to count workers at a building
+                def count_workers_at(bx, by, job_type):
+                    count = 0
+                    for vv in villagers:
+                        if vv[0] == current_planet_name and vv[3] == job_type:
+                            if len(vv) >= 7:  # Has target position
+                                if abs(vv[5] - bx) < 10 and abs(vv[6] - by) < 10:
+                                    count = count + 1
+                    return count
+
+                # Helper to find a building with room
+                def find_building_with_room(building_type, job_type):
+                    for b in buildings:
+                        if b[0] == current_planet_name and b[3] == building_type:
+                            workers = count_workers_at(b[1], b[2], job_type)
+                            if workers < MAX_WORKERS_PER_BUILDING:
+                                return b
+                    return None
+
+                # 1 = Assign FARMER
+                if event.key == pygame.K_1:
+                    for v in villagers:
+                        if v[0] == current_planet_name and v[3] == "homeless":
+                            building = find_building_with_room("farm", "farmer")
+                            if building:
+                                v[3] = "farmer"
+                                # Add target position (extend list if needed)
+                                while len(v) < 7:
+                                    v.append(0)
+                                v[5] = building[1]  # target_x
+                                v[6] = building[2]  # target_y
+                                workers = count_workers_at(building[1], building[2], "farmer")
+                                print("Villager became a FARMER! (" + str(workers) + "/" + str(MAX_WORKERS_PER_BUILDING) + " at this farm)")
+                            else:
+                                # Check if we have any farms at all
+                                has_farm = any(b[0] == current_planet_name and b[3] == "farm" for b in buildings)
+                                if has_farm:
+                                    print("All farms are FULL! (max " + str(MAX_WORKERS_PER_BUILDING) + " workers each)")
+                                else:
+                                    print("Need a FARM to assign farmers!")
+                            break
+
+                # 2 = Assign MINER
+                if event.key == pygame.K_2:
+                    for v in villagers:
+                        if v[0] == current_planet_name and v[3] == "homeless":
+                            building = find_building_with_room("miner", "miner")
+                            if building:
+                                v[3] = "miner"
+                                while len(v) < 7:
+                                    v.append(0)
+                                v[5] = building[1]
+                                v[6] = building[2]
+                                workers = count_workers_at(building[1], building[2], "miner")
+                                print("Villager became a MINER! (" + str(workers) + "/" + str(MAX_WORKERS_PER_BUILDING) + " at this miner)")
+                            else:
+                                has_miner = any(b[0] == current_planet_name and b[3] == "miner" for b in buildings)
+                                if has_miner:
+                                    print("All miners are FULL!")
+                                else:
+                                    print("Need an AUTO MINER to assign miners!")
+                            break
+
+                # 3 = Assign SOLDIER
+                if event.key == pygame.K_3:
+                    for v in villagers:
+                        if v[0] == current_planet_name and v[3] == "homeless":
+                            building = find_building_with_room("barracks", "soldier")
+                            if building:
+                                v[3] = "soldier"
+                                while len(v) < 7:
+                                    v.append(0)
+                                v[5] = building[1]
+                                v[6] = building[2]
+                                soldiers = soldiers + 1
+                                army_power = army_power + 10
+                                workers = count_workers_at(building[1], building[2], "soldier")
+                                print("Villager became a SOLDIER! (" + str(workers) + "/" + str(MAX_WORKERS_PER_BUILDING) + ") Army: " + str(army_power))
+                            else:
+                                has_barracks = any(b[0] == current_planet_name and b[3] == "barracks" for b in buildings)
+                                if has_barracks:
+                                    print("All barracks are FULL!")
+                                else:
+                                    print("Need BARRACKS to train soldiers!")
+                            break
+
+                # 4 = Assign BANKER
+                if event.key == pygame.K_4:
+                    for v in villagers:
+                        if v[0] == current_planet_name and v[3] == "homeless":
+                            building = find_building_with_room("bank", "banker")
+                            if building:
+                                v[3] = "banker"
+                                while len(v) < 7:
+                                    v.append(0)
+                                v[5] = building[1]
+                                v[6] = building[2]
+                                workers = count_workers_at(building[1], building[2], "banker")
+                                print("Villager became a BANKER! (" + str(workers) + "/" + str(MAX_WORKERS_PER_BUILDING) + " at this bank)")
+                            else:
+                                has_bank = any(b[0] == current_planet_name and b[3] == "bank" for b in buildings)
+                                if has_bank:
+                                    print("All banks are FULL!")
+                                else:
+                                    print("Need a BANK to assign bankers!")
+                            break
+
+                # 5 = Assign SHOPKEEPER
+                if event.key == pygame.K_5:
+                    for v in villagers:
+                        if v[0] == current_planet_name and v[3] == "homeless":
+                            building = find_building_with_room("market", "shopkeeper")
+                            if building:
+                                v[3] = "shopkeeper"
+                                while len(v) < 7:
+                                    v.append(0)
+                                v[5] = building[1]
+                                v[6] = building[2]
+                                workers = count_workers_at(building[1], building[2], "shopkeeper")
+                                print("Villager became a SHOPKEEPER! (" + str(workers) + "/" + str(MAX_WORKERS_PER_BUILDING) + " at this market)")
+                            else:
+                                has_market = any(b[0] == current_planet_name and b[3] == "market" for b in buildings)
+                                if has_market:
+                                    print("All markets are FULL!")
+                                else:
+                                    print("Need a MARKET to assign shopkeepers!")
+                            break
+
+                # 6 = Assign BUILDER (no building needed, they wander)
+                if event.key == pygame.K_6:
+                    for v in villagers:
+                        if v[0] == current_planet_name and v[3] == "homeless":
+                            v[3] = "builder"
+                            print("Villager became a BUILDER!")
+                            break
+
+            # --- BUILDING INTERIOR CONTROLS! ---
+            if event.type == pygame.KEYDOWN and game_state == "inside_building" and inside_building:
+                building_type = inside_building[3]
+
+                # ESC = Leave building
+                if event.key == pygame.K_ESCAPE:
+                    game_state = "on_planet"
+                    print("Left " + building_type + "!")
+
+                # UP/DOWN = Navigate menu
+                if event.key == pygame.K_UP:
+                    inside_menu_selection = inside_menu_selection - 1
+                    if inside_menu_selection < 0:
+                        inside_menu_selection = 3  # Most buildings have 4 options
+
+                if event.key == pygame.K_DOWN:
+                    inside_menu_selection = inside_menu_selection + 1
+                    if inside_menu_selection > 3:
+                        inside_menu_selection = 0
+
+                # Number keys for quick actions!
+                # FARM actions
+                if building_type == "farm":
+                    if event.key == pygame.K_1:
+                        # Plant crops
+                        if coins >= 10:
+                            coins = coins - 10
+                            print("Planted new crops!")
+                        else:
+                            print("Need 10 coins to plant!")
+                    elif event.key == pygame.K_2:
+                        # Harvest
+                        food = min(100, food + 30)
+                        print("Harvested crops! Food: " + str(food))
+                    elif event.key == pygame.K_3:
+                        # Water crops
+                        print("Watered crops! They grow faster!")
+
+                # BANK actions
+                elif building_type == "bank":
+                    if event.key == pygame.K_1:
+                        # Deposit
+                        if coins >= 100:
+                            coins = coins - 100
+                            bank_balance = bank_balance + 100
+                            print("Deposited 100 coins! Balance: " + str(bank_balance))
+                        else:
+                            print("Need 100 coins to deposit!")
+                    elif event.key == pygame.K_2:
+                        # Withdraw
+                        if bank_balance >= 100:
+                            bank_balance = bank_balance - 100
+                            coins = coins + 100
+                            print("Withdrew 100 coins! Balance: " + str(bank_balance))
+                        else:
+                            print("Not enough in bank!")
+                    elif event.key == pygame.K_3:
+                        # Collect interest (10% of balance)
+                        interest = bank_balance // 10
+                        if interest > 0:
+                            bank_balance = bank_balance + interest
+                            print("Collected " + str(interest) + " coins interest! Balance: " + str(bank_balance))
+                        else:
+                            print("No interest to collect yet!")
+
+                # MARKET actions
+                elif building_type == "market":
+                    if event.key == pygame.K_1:
+                        # Sell wood
+                        if wood >= 10:
+                            wood = wood - 10
+                            earned = 10 * market_prices["wood"]
+                            coins = coins + earned
+                            print("Sold 10 wood for " + str(earned) + " coins!")
+                        else:
+                            print("Need 10 wood to sell!")
+                    elif event.key == pygame.K_2:
+                        # Sell stone
+                        if stone >= 10:
+                            stone = stone - 10
+                            earned = 10 * market_prices["stone"]
+                            coins = coins + earned
+                            print("Sold 10 stone for " + str(earned) + " coins!")
+                        else:
+                            print("Need 10 stone to sell!")
+                    elif event.key == pygame.K_3:
+                        # Sell iron
+                        if iron >= 5:
+                            iron = iron - 5
+                            earned = 5 * market_prices["iron"]
+                            coins = coins + earned
+                            print("Sold 5 iron for " + str(earned) + " coins!")
+                        else:
+                            print("Need 5 iron to sell!")
+                    elif event.key == pygame.K_4:
+                        # Sell gold
+                        if gold >= 1:
+                            gold = gold - 1
+                            earned = market_prices["gold"]
+                            coins = coins + earned
+                            print("Sold 1 gold for " + str(earned) + " coins!")
+                        else:
+                            print("Need gold to sell!")
+
+                # BARRACKS actions
+                elif building_type == "barracks":
+                    if event.key == pygame.K_1:
+                        # Train soldier (costs 1 homeless villager + 50 iron)
+                        homeless_villager = None
+                        for v in villagers:
+                            if v[0] == inside_building[0] and v[3] == "homeless":
+                                homeless_villager = v
+                                break
+                        if homeless_villager and iron >= 50:
+                            villagers.remove(homeless_villager)
+                            population = population - 1
+                            iron = iron - 50
+                            soldiers = soldiers + 1
+                            army_power = army_power + 10
+                            print("Trained a soldier! Army: " + str(soldiers) + " Power: " + str(army_power))
+                        elif not homeless_villager:
+                            print("Need a homeless villager to train!")
+                        else:
+                            print("Need 50 iron to train a soldier!")
+                    elif event.key == pygame.K_2:
+                        # Upgrade army power
+                        if coins >= 100:
+                            coins = coins - 100
+                            army_power = army_power + 50
+                            print("Army upgraded! Power: " + str(army_power))
+                        else:
+                            print("Need 100 coins!")
+                    elif event.key == pygame.K_3:
+                        # Deploy to defense
+                        print("Soldiers deployed to defend the planet!")
+
+                # HOUSE actions
+                elif building_type == "house":
+                    if event.key == pygame.K_1:
+                        # Rest
+                        lives = min(lives + 1, 5)
+                        print("Rested! Lives: " + str(lives))
+                    elif event.key == pygame.K_2:
+                        # Check happiness
+                        happy_count = sum(1 for v in villagers if v[0] == inside_building[0] and v[4] > 50)
+                        print("Happy villagers: " + str(happy_count))
+
+                # TAVERN actions
+                elif building_type == "tavern":
+                    if event.key == pygame.K_1:
+                        # Buy drink
+                        if coins >= 5:
+                            coins = coins - 5
+                            for v in villagers:
+                                if v[0] == inside_building[0]:
+                                    v[4] = min(100, v[4] + 10)  # Increase happiness
+                            print("Bought drinks! Villagers are happier!")
+                        else:
+                            print("Need 5 coins!")
+                    elif event.key == pygame.K_2:
+                        # Listen to stories
+                        print("You hear tales of distant galaxies...")
+                    elif event.key == pygame.K_3:
+                        # Recruit adventurer
+                        if coins >= 50:
+                            coins = coins - 50
+                            vx = random.randint(100, SCREEN_WIDTH - 100)
+                            vy = random.randint(100, SCREEN_HEIGHT - 100)
+                            villagers.append([inside_building[0], vx, vy, "homeless", 80, 0, 0])
+                            population = population + 1
+                            print("Recruited an adventurer!")
+                        else:
+                            print("Need 50 coins to recruit!")
+
+                # WAREHOUSE actions
+                elif building_type == "warehouse":
+                    if event.key == pygame.K_1:
+                        print("Storage organized!")
+                    elif event.key == pygame.K_2:
+                        print("Inventory: " + str(materials) + " mat, " + str(wood) + " wood, " + str(stone) + " stone, " + str(iron) + " iron, " + str(gold) + " gold")
+
+                # HOSPITAL actions
+                elif building_type == "hospital":
+                    if event.key == pygame.K_1:
+                        # Heal villagers
+                        if coins >= 50:
+                            coins = coins - 50
+                            for v in villagers:
+                                if v[0] == inside_building[0]:
+                                    v[4] = 100  # Full happiness/health
+                            print("All villagers healed!")
+                        else:
+                            print("Need 50 coins!")
+                    elif event.key == pygame.K_2:
+                        print("Trained a medic!")
 
             # --- SHOP CONTROLS! ---
             # In the shop, use UP/DOWN to pick items and ENTER to buy!
@@ -649,7 +1505,6 @@ async def main():
                             coins = coins - SHIELD_PRICE
                             has_shield = True
                             shield_hits = shield_hits + 1  # Can buy multiple!
-                            save_coins(coins)
                             print("Bought SHIELD! You have " + str(shield_hits) + " shield(s)!")
 
                     # Try to buy FAST SHOOTING!
@@ -657,7 +1512,6 @@ async def main():
                         if coins >= FAST_SHOOTING_PRICE and not has_fast_shooting:
                             coins = coins - FAST_SHOOTING_PRICE
                             has_fast_shooting = True
-                            save_coins(coins)
                             print("Bought FAST SHOOTING!")
 
                     # Try to buy BIG LASER!
@@ -665,7 +1519,6 @@ async def main():
                         if coins >= BIG_LASER_PRICE and not has_big_laser:
                             coins = coins - BIG_LASER_PRICE
                             has_big_laser = True
-                            save_coins(coins)
                             print("Bought BIG LASER!")
 
                     # Try to buy a WINGMAN!
@@ -673,8 +1526,156 @@ async def main():
                         if coins >= WINGMAN_PRICE:
                             coins = coins - WINGMAN_PRICE
                             wingmen_count = wingmen_count + 1
-                            save_coins(coins)
                             print("Bought WINGMAN! You have " + str(wingmen_count) + " wingmen!")
+
+                    # Go to SKIN SHOP!
+                    elif selected_item["name"] == "SKINS":
+                        game_state = "skin_shop"
+                        skin_shop_selection = 0
+
+            # --- LOBBY CONTROLS! ---
+            # In the lobby, use UP/DOWN to pick options and ENTER to select!
+            if event.type == pygame.KEYDOWN and game_state == "lobby":
+                # Move UP in the lobby menu
+                if event.key == pygame.K_UP:
+                    lobby_selection = lobby_selection - 1
+                    quit_confirm = False  # Cancel quit confirmation when moving
+                    if lobby_selection < 0:
+                        lobby_selection = 3  # 4 options: Shop, Continue, Leaderboard, Quit
+
+                # Move DOWN in the lobby menu
+                if event.key == pygame.K_DOWN:
+                    lobby_selection = lobby_selection + 1
+                    quit_confirm = False  # Cancel quit confirmation when moving
+                    if lobby_selection > 3:
+                        lobby_selection = 0  # Wrap to top!
+
+                # ESC to cancel quit confirmation
+                if event.key == pygame.K_ESCAPE:
+                    quit_confirm = False
+
+                # ENTER to pick the selected option!
+                if event.key == pygame.K_RETURN:
+                    if lobby_selection == 0:
+                        # SHOP - Go buy stuff!
+                        game_state = "shop"
+                        shop_selection = 0
+                    elif lobby_selection == 1:
+                        # CONTINUE - Go back to space exploration!
+                        game_state = "playing"
+                    elif lobby_selection == 2:
+                        # LEADERBOARD - View high scores!
+                        game_state = "leaderboard"
+                    elif lobby_selection == 3:
+                        # QUIT TO TITLE - Need to confirm first!
+                        if quit_confirm:
+                            # Already confirmed, actually quit!
+                            game_state = "title"
+                            title_timer = 0
+                            quit_confirm = False
+                        else:
+                            # First press - ask for confirmation
+                            quit_confirm = True
+
+            # --- SKIN SHOP CONTROLS! ---
+            if event.type == pygame.KEYDOWN and game_state == "skin_shop":
+                # Move LEFT in skin selection
+                if event.key == pygame.K_LEFT:
+                    skin_shop_selection = skin_shop_selection - 1
+                    if skin_shop_selection < 0:
+                        skin_shop_selection = len(all_skins) - 1
+
+                # Move RIGHT in skin selection
+                if event.key == pygame.K_RIGHT:
+                    skin_shop_selection = skin_shop_selection + 1
+                    if skin_shop_selection >= len(all_skins):
+                        skin_shop_selection = 0
+
+                # ENTER to buy/equip skin
+                if event.key == pygame.K_RETURN:
+                    selected_skin = all_skins[skin_shop_selection]
+                    if selected_skin["name"] in owned_skins:
+                        # Already own it - equip it!
+                        current_skin = selected_skin["name"]
+                        save_skins(current_skin, owned_skins)
+                        print("Equipped " + selected_skin["display"] + "!")
+                    else:
+                        # Try to buy it!
+                        if coins >= selected_skin["price"]:
+                            coins = coins - selected_skin["price"]
+                            owned_skins.append(selected_skin["name"])
+                            current_skin = selected_skin["name"]
+                            save_skins(current_skin, owned_skins)
+                            print("Bought and equipped " + selected_skin["display"] + "!")
+                        else:
+                            print("Need more coins!")
+
+                # ESCAPE to go back to shop
+                if event.key == pygame.K_ESCAPE:
+                    game_state = "shop"
+
+                # D to open drawing tool (for custom skin)
+                if event.key == pygame.K_d:
+                    game_state = "skin_editor"
+
+            # --- STORY ENDING CONTROLS! ---
+            if event.type == pygame.KEYDOWN and game_state == "story_ending":
+                if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                    story_page = story_page + 1
+                    if story_page >= 5:  # 5 pages of story
+                        # Reset everything for a new game!
+                        game_state = "title"
+                        story_page = 0
+                        level = 1
+                        score = 0
+                        lives = 5
+
+            # --- SKIN EDITOR CONTROLS! ---
+            if event.type == pygame.KEYDOWN and game_state == "skin_editor":
+                # Change color with LEFT/RIGHT
+                if event.key == pygame.K_LEFT:
+                    drawing_color_index = drawing_color_index - 1
+                    if drawing_color_index < 0:
+                        drawing_color_index = len(drawing_colors) - 1
+                    drawing_color = drawing_colors[drawing_color_index]
+                if event.key == pygame.K_RIGHT:
+                    drawing_color_index = drawing_color_index + 1
+                    if drawing_color_index >= len(drawing_colors):
+                        drawing_color_index = 0
+                    drawing_color = drawing_colors[drawing_color_index]
+                # C to clear drawing
+                if event.key == pygame.K_c:
+                    custom_skin_pixels = []
+                # S to save and equip custom skin
+                if event.key == pygame.K_s:
+                    if "custom" not in owned_skins:
+                        if coins >= 100:
+                            coins = coins - 100
+                            owned_skins.append("custom")
+                    current_skin = "custom"
+                    save_skins(current_skin, owned_skins)
+                    print("Custom skin equipped!")
+                # ESCAPE to go back to skin shop
+                if event.key == pygame.K_ESCAPE:
+                    game_state = "skin_shop"
+
+            # --- SKIN EDITOR MOUSE DRAWING! ---
+            if game_state == "skin_editor":
+                if event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.MOUSEMOTION and pygame.mouse.get_pressed()[0]):
+                    mx, my = pygame.mouse.get_pos()
+                    # Drawing area is 32x32 pixels, scaled up to 256x256 on screen
+                    # Centered at screen
+                    draw_area_x = SCREEN_WIDTH // 2 - 128
+                    draw_area_y = SCREEN_HEIGHT // 2 - 128
+                    if draw_area_x <= mx <= draw_area_x + 256 and draw_area_y <= my <= draw_area_y + 256:
+                        # Convert screen position to pixel position (0-31)
+                        pixel_x = (mx - draw_area_x) // 8
+                        pixel_y = (my - draw_area_y) // 8
+                        # Add pixel if not already there
+                        new_pixel = [pixel_x, pixel_y, drawing_color]
+                        # Remove old pixel at same position
+                        custom_skin_pixels = [p for p in custom_skin_pixels if not (p[0] == pixel_x and p[1] == pixel_y)]
+                        custom_skin_pixels.append(new_pixel)
 
             # --- SHOOTING LASERS ---
             # When SPACE bar is pressed, shoot a laser! (only if game is NOT over)
@@ -843,13 +1844,27 @@ async def main():
                 dist = ((planet_explore_x - mat[0]) ** 2 + (planet_explore_y - mat[1]) ** 2) ** 0.5
                 if dist < 40:  # Close enough to collect!
                     materials_to_remove.append(mat)
+                    # Different materials give different resources!
                     if mat[2] == "crystal":
                         materials = materials + 5
+                        gold = gold + 1  # Crystals contain gold!
+                        print("Collected crystal! Materials: " + str(materials) + " Gold: " + str(gold))
                     elif mat[2] == "metal":
                         materials = materials + 3
+                        iron = iron + 2  # Metal = iron!
+                        print("Collected metal! Materials: " + str(materials) + " Iron: " + str(iron))
+                    elif mat[2] == "wood":
+                        materials = materials + 2
+                        wood = wood + 3  # Wood for building!
+                        print("Collected wood! Wood: " + str(wood))
+                    elif mat[2] == "stone":
+                        materials = materials + 2
+                        stone = stone + 2  # Stone for strong buildings!
+                        print("Collected stone! Stone: " + str(stone))
                     else:  # rock
                         materials = materials + 1
-                    print("Collected " + mat[2] + "! Materials: " + str(materials))
+                        stone = stone + 1  # Rocks give stone too!
+                        print("Collected rock! Materials: " + str(materials))
 
             for mat in materials_to_remove:
                 planet_materials.remove(mat)
@@ -870,6 +1885,77 @@ async def main():
 
             for fd in food_to_remove:
                 planet_food.remove(fd)
+
+            # --- VILLAGER MOVEMENT! ---
+            # Villagers walk towards their assigned buildings!
+            villager_speed = 1.5 * dt
+            for v in villagers:
+                if v[0] == current_planet_name and v[3] != "homeless":
+                    # Check if villager has a target position
+                    if len(v) >= 7 and (v[5] != 0 or v[6] != 0):
+                        target_x = v[5]
+                        target_y = v[6]
+
+                        # Move towards target
+                        dx = target_x - v[1]
+                        dy = target_y - v[2]
+                        dist = (dx * dx + dy * dy) ** 0.5
+
+                        if dist > 30:  # Not at building yet
+                            # Normalize and move
+                            v[1] = v[1] + (dx / dist) * villager_speed
+                            v[2] = v[2] + (dy / dist) * villager_speed
+                        else:
+                            # At building! Do a little wobble to look busy
+                            v[1] = target_x + random.randint(-20, 20) * 0.1
+                            v[2] = target_y + random.randint(-20, 20) * 0.1
+
+                # Homeless villagers wander randomly
+                elif v[0] == current_planet_name and v[3] == "homeless":
+                    if random.random() < 0.02:  # Occasionally change direction
+                        v[1] = v[1] + random.randint(-30, 30)
+                        v[2] = v[2] + random.randint(-30, 30)
+                    # Keep on screen
+                    v[1] = max(50, min(SCREEN_WIDTH - 50, v[1]))
+                    v[2] = max(50, min(SCREEN_HEIGHT - 50, v[2]))
+
+        # --- PLANET ECONOMIES (BACKGROUND)! ---
+        # All planets produce/consume even when you're not there!
+        # This runs every frame for ALL planets!
+        economy_dt = delta_ms / 1000.0  # Convert to seconds
+        for planet in planets:
+            planet_name = planet[2]
+            if planet_name not in planet_economy:
+                continue
+
+            eco = planet_economy[planet_name]
+
+            # Count farmers and villagers on this planet
+            farmers_here = sum(1 for v in villagers if v[0] == planet_name and v[3] == "farmer")
+            villagers_here = sum(1 for v in villagers if v[0] == planet_name)
+
+            # Count farms on this planet
+            farms_here = sum(1 for b in buildings if b[0] == planet_name and b[3] == "farm")
+
+            # PRODUCTION: Farmers produce food (need a farm to work at!)
+            if farms_here > 0 and farmers_here > 0:
+                food_produced = min(farmers_here, farms_here * 3) * FOOD_PER_FARMER * economy_dt
+                eco["food_supply"] = eco["food_supply"] + food_produced
+
+            # CONSUMPTION: Villagers eat food
+            if villagers_here > 0:
+                food_eaten = villagers_here * FOOD_PER_VILLAGER * economy_dt
+                eco["food_supply"] = eco["food_supply"] - food_eaten
+
+                # If no food, villagers get unhappy!
+                if eco["food_supply"] < 0:
+                    eco["food_supply"] = 0
+                    for v in villagers:
+                        if v[0] == planet_name:
+                            v[4] = max(0, v[4] - 0.1 * economy_dt)  # Lose happiness
+
+            # Cap food supply at 200
+            eco["food_supply"] = min(200, eco["food_supply"])
 
         # --- HUNGER! ---
         # Food decreases while playing (you get hungry!)
@@ -1135,6 +2221,84 @@ async def main():
                     explosions.append([laser[0], laser[1], 0])
 
         # --- TREASURE CHESTS! ---
+        # --- ROBOT FACTORY SPAWNS HELPER ROBOTS! ---
+        if game_state == "playing" and not game_over:
+            factory_spawn_timer = factory_spawn_timer + delta_ms
+            # Count how many factories we have
+            factory_count = 0
+            for building in buildings:
+                if building[3] == "factory":
+                    factory_count = factory_count + 1
+
+            # Spawn robots every 5 seconds if we have factories!
+            # Max 5 robots at a time!
+            MAX_ROBOTS = 5
+            if factory_count > 0 and factory_spawn_timer >= 5000 and len(helper_robots) < MAX_ROBOTS:
+                factory_spawn_timer = 0
+                # Spawn one robot per factory (up to max!)
+                robots_to_spawn = min(factory_count, MAX_ROBOTS - len(helper_robots))
+                for i in range(robots_to_spawn):
+                    # Robot spawns from bottom of screen
+                    robot_x = random.randint(100, SCREEN_WIDTH - 100)
+                    robot_y = SCREEN_HEIGHT + 30
+                    helper_robots.append([robot_x, robot_y, 0, 0, 0])  # x, y, target_x, target_y, shoot_timer
+                    print("Robot helper deployed! (" + str(len(helper_robots)) + "/" + str(MAX_ROBOTS) + ")")
+
+        # --- MOVE HELPER ROBOTS! ---
+        robots_to_remove = []
+        for robot in helper_robots:
+            # Find nearest enemy to target
+            nearest_dist = 9999
+            nearest_target = None
+            # Check zeldas
+            for zelda in zeldas:
+                dist = ((robot[0] - zelda[0]) ** 2 + (robot[1] - zelda[1]) ** 2) ** 0.5
+                if dist < nearest_dist:
+                    nearest_dist = dist
+                    nearest_target = zelda
+            # Check boss if active
+            if boss_active and nearest_dist > 200:
+                nearest_target = [boss_x, boss_y]
+                nearest_dist = ((robot[0] - boss_x) ** 2 + (robot[1] - boss_y) ** 2) ** 0.5
+
+            # Move robot towards target (or hover in position)
+            if nearest_target is not None:
+                robot[2] = nearest_target[0]
+                robot[3] = nearest_target[1]
+                # Move towards target
+                dx = robot[2] - robot[0]
+                dy = robot[3] - robot[1]
+                dist = max(1, (dx * dx + dy * dy) ** 0.5)
+                robot_speed = 3 * dt
+                robot[0] = robot[0] + (dx / dist) * robot_speed
+                robot[1] = robot[1] + (dy / dist) * robot_speed
+            else:
+                # No target - fly up slowly
+                robot[1] = robot[1] - 1 * dt
+
+            # Keep robot on screen
+            robot[0] = max(30, min(SCREEN_WIDTH - 30, robot[0]))
+            robot[1] = max(50, min(SCREEN_HEIGHT - 50, robot[1]))
+
+            # Robot shoots at enemies!
+            robot[4] = robot[4] + delta_ms
+            if robot[4] >= 800 and nearest_target is not None:  # Shoot every 0.8 seconds
+                robot[4] = 0
+                # Calculate direction to target
+                dx = nearest_target[0] - robot[0]
+                dy = nearest_target[1] - robot[1]
+                dist = max(1, (dx * dx + dy * dy) ** 0.5)
+                speed = 10
+                turret_lasers.append([robot[0], robot[1], (dx / dist) * speed, (dy / dist) * speed])
+
+            # Remove robot if it goes off screen (after 30 seconds of life)
+            if robot[1] < -100:
+                robots_to_remove.append(robot)
+
+        for robot in robots_to_remove:
+            if robot in helper_robots:
+                helper_robots.remove(robot)
+
         # Spawn chests periodically during gameplay!
         if not game_over and game_state == "playing":
             chest_spawn_timer = chest_spawn_timer + delta_ms
@@ -1188,7 +2352,6 @@ async def main():
                 elif loot == "coin_bonus":
                     bonus = random.randint(50, 150)
                     coins = coins + bonus
-                    save_coins(coins)
                     print("GOT " + str(bonus) + " BONUS COINS!")
                 # Create a sparkle explosion!
                 explosions.append([chest[0], chest[1], 400])
@@ -1318,6 +2481,14 @@ async def main():
                     boss_x = SCREEN_WIDTH // 2 + math.sin(dance_angle * 4) * 350
                     boss_y = 100 + abs(math.sin(dance_angle * 6)) * 60
 
+                # --- DANCING APPLE MOVEMENT ---
+                elif boss_type == "dancing_apple":
+                    # Happy dancing movement! Bounces and spins!
+                    dance_angle = dance_angle + 0.1 * dt
+                    boss_x = SCREEN_WIDTH // 2 + math.sin(dance_angle * 3) * 300
+                    # Bouncy up and down like dancing!
+                    boss_y = 120 + abs(math.sin(dance_angle * 8)) * 50
+
             # Boss shoots attacks at Thrawn!
             boss_shoot_timer = boss_shoot_timer + delta_ms
             if boss_shoot_timer >= boss_shoot_rate and boss_y > 50:
@@ -1362,6 +2533,15 @@ async def main():
                     for i in range(6):
                         angle = random.uniform(-0.5, 0.5)
                         boss_lasers.append([boss_x + random.randint(-50, 50), boss_y + 40, angle])
+                elif boss_type == "dancing_apple":
+                    # Shoots apple seeds in a spiral pattern!
+                    for i in range(8):
+                        angle = -0.4 + i * 0.1 + math.sin(dance_angle) * 0.2
+                        boss_lasers.append([boss_x + random.randint(-30, 30), boss_y + 50, angle])
+                    # Sometimes spawns worm helpers!
+                    if random.randint(0, 100) < 20:
+                        zeldas.append([boss_x - 40, boss_y + 60, -1])
+                        zeldas.append([boss_x + 40, boss_y + 60, 1])
                 boss_shoot_timer = 0
 
         # Move boss lasers
@@ -1394,9 +2574,11 @@ async def main():
                 boss_defeated = False
                 boss_defeated_timer = 0
 
-                # Go to the SHOP after beating a boss!
-                game_state = "shop"
-                shop_selection = 0
+                # Go to LOBBY after beating a boss!
+                game_state = "lobby"
+                lobby_selection = 0
+                lobby_reason = "level"  # We beat the level!
+                quit_confirm = False  # Reset quit confirmation
                 # Center camera on player
                 camera_x = player_world_x - SCREEN_WIDTH // 2
                 camera_y = player_world_y - SCREEN_HEIGHT // 2
@@ -1428,7 +2610,7 @@ async def main():
                 # Level 1: Star Destroyer, 2: Zelda Queen, 3: Giant Robot,
                 # 4: Space Dragon, 5: Dancing 67, 6: Mega Worm,
                 # 7: Death Star, 8: The Bugger (giant bug!)
-                boss_types = ["star_destroyer", "zelda_queen", "giant_robot", "space_dragon", "dancing_67", "mega_worm", "death_star", "the_bugger"]
+                boss_types = ["star_destroyer", "zelda_queen", "giant_robot", "space_dragon", "dancing_67", "mega_worm", "death_star", "the_bugger", "dancing_apple"]
                 boss_type = boss_types[(level - 1) % len(boss_types)]
 
 
@@ -1486,6 +2668,10 @@ async def main():
         for zelda in zeldas_to_remove:
             if zelda in zeldas:
                 zeldas.remove(zelda)
+                # REFUGEES! Sometimes survivors escape destroyed enemy ships!
+                if random.random() < 0.15:  # 15% chance of refugees
+                    refugees_waiting = refugees_waiting + random.randint(1, 3)
+                    print("Refugees escaped! " + str(refugees_waiting) + " waiting!")
 
         # --- LASERS HIT THE BOSS? ---
         # Check if player's lasers hit the Star Destroyer!
@@ -1537,6 +2723,9 @@ async def main():
                 zeldas = []
                 swords = []
                 boss_lasers = []
+                # CHECK FOR GAME ENDING AT LEVEL 2000!
+                if level >= 2000:
+                    game_state = "story_ending"
 
         # --- BOSS LASERS HIT PLAYER? ---
         # Check if boss's green lasers hit the player (astronaut or ship)!
@@ -1676,21 +2865,46 @@ async def main():
                 # No wingmen left... it's really game over!
                 game_over = True
                 game_over_timer = 0
-                # ADD YOUR SCORE TO YOUR COINS! You keep what you earned!
-                coins = coins + score
-                save_coins(coins)  # Save to file so you don't lose them!
-                print("You earned " + str(score) + " coins! Total: " + str(coins))
-                # SAVE TO LEADERBOARD!
-                if current_user != "" and score > 0:
-                    leaderboard = save_to_leaderboard(current_user, score)
-                    print("Score saved to leaderboard!")
-                # ROGUELIKE: Lose chest power-ups on death! (but keep coins!)
+                # SAVE TO LEADERBOARD before reset!
+                final_score = score + coins  # Total progress this run
+                if current_user != "" and final_score > 0:
+                    leaderboard = save_to_leaderboard(current_user, final_score)
+                    print("Final score: " + str(final_score) + " saved to leaderboard!")
+
+                # ROGUELIKE: RESET EVERYTHING ON DEATH!
+                print("=== GAME OVER - Starting fresh! ===")
+                coins = STARTING_COINS  # Reset to starting coins
+                score = 0
+                materials = 0
+                wood = 0
+                stone = 0
+                iron = 0
+                gold = 0
+                food = 100
+                population = 0
+                villagers = []
+                soldiers = 0
+                army_power = 0
+                refugees_waiting = 0
+                buildings = []
+                bank_balance = 0
+                # Reset planet economies
+                for pname in planet_economy:
+                    planet_economy[pname]["food_supply"] = 50
+                    planet_economy[pname]["materials_supply"] = 0
+                # Reset power-ups
                 has_spread_shot = False
                 has_homing_missiles = False
                 has_piercing_laser = False
                 has_double_points = False
                 double_points_timer = 0
                 homing_missiles = []
+                wingmen = []
+                wingmen_count = 0
+                has_shield = False
+                shield_hits = 0
+                has_fast_shooting = False
+                has_big_laser = False
                 chests = []
                 chest_spawn_timer = 0
                 print("Lost all chest power-ups!")
@@ -1708,14 +2922,15 @@ async def main():
             game_over_timer = game_over_timer + delta_ms
             # After showing explosions for a while, allow going back to lobby
             if game_over_timer > 5000:
-                # Press any key to go back to exploring!
+                # Press any key to go to LOBBY!
                 keys = pygame.key.get_pressed()
                 if any(keys):
-                    # RESET BATTLE and go back to space exploration!
-                    game_state = "playing"
-                    # Center camera on player
-                    camera_x = player_world_x - SCREEN_WIDTH // 2
-                    camera_y = player_world_y - SCREEN_HEIGHT // 2
+                    # Go to LOBBY after dying!
+                    game_state = "lobby"
+                    lobby_selection = 0
+                    lobby_reason = "death"  # We died!
+                    quit_confirm = False  # Reset quit confirmation
+
                     game_over = False
                     game_over_timer = 0
                     game_over_explosions = []
@@ -1728,6 +2943,9 @@ async def main():
                     # Reset Thrawn position
                     thrawn_x = SCREEN_WIDTH // 2
                     thrawn_y = SCREEN_HEIGHT // 2
+                    # Center camera on player
+                    camera_x = player_world_x - SCREEN_WIDTH // 2
+                    camera_y = player_world_y - SCREEN_HEIGHT // 2
 
                     # Clear all enemies and projectiles
                     lasers = []
@@ -1911,27 +3129,124 @@ async def main():
                         pygame.draw.rect(window, (150, 150, 255), (bx - 25, by - 25, 50, 50))
                         base_label = font.render("BASE", True, (255, 255, 255))
                         window.blit(base_label, (bx - 20, by - 10))
-                    else:  # turret
+                    elif building[3] == "turret":
                         # Turret = triangle on circle
                         pygame.draw.circle(window, (200, 100, 100), (bx, by), 20)
                         pygame.draw.polygon(window, (255, 150, 150), [
                             (bx, by - 35), (bx - 15, by - 5), (bx + 15, by - 5)
                         ])
+                    elif building[3] == "house":
+                        # House = cute little house with roof!
+                        pygame.draw.rect(window, (180, 130, 80), (bx - 20, by - 15, 40, 30))  # Walls
+                        pygame.draw.polygon(window, (200, 80, 80), [
+                            (bx - 25, by - 15), (bx, by - 40), (bx + 25, by - 15)  # Roof
+                        ])
+                        pygame.draw.rect(window, (100, 60, 40), (bx - 5, by, 10, 15))  # Door
+                        pygame.draw.rect(window, (150, 200, 255), (bx + 8, by - 8, 8, 8))  # Window
+                    elif building[3] == "spaceport":
+                        # Space Port = landing pad with tower
+                        pygame.draw.rect(window, (80, 80, 100), (bx - 40, by + 10, 80, 10))  # Landing pad
+                        pygame.draw.rect(window, (100, 100, 120), (bx + 20, by - 40, 15, 50))  # Tower
+                        pygame.draw.circle(window, (0, 255, 100), (bx + 27, by - 45), 5)  # Light
+                    elif building[3] == "market":
+                        # Market = stall with awning
+                        pygame.draw.rect(window, (180, 140, 100), (bx - 25, by - 10, 50, 30))  # Counter
+                        pygame.draw.rect(window, (200, 50, 50), (bx - 30, by - 25, 60, 15))  # Awning
+                        pygame.draw.rect(window, (255, 200, 100), (bx - 30, by - 40, 60, 15))  # Stripes
+                    elif building[3] == "barracks":
+                        # Barracks = military building with flag
+                        pygame.draw.rect(window, (100, 80, 60), (bx - 30, by - 20, 60, 40))  # Building
+                        pygame.draw.rect(window, (60, 50, 40), (bx - 5, by, 10, 20))  # Door
+                        pygame.draw.line(window, (80, 60, 40), (bx + 20, by - 20), (bx + 20, by - 50), 3)  # Flagpole
+                        pygame.draw.rect(window, (255, 0, 0), (bx + 20, by - 50, 15, 10))  # Flag
+                    elif building[3] == "tavern":
+                        # Tavern = cozy building with sign
+                        pygame.draw.rect(window, (140, 100, 60), (bx - 25, by - 15, 50, 35))  # Building
+                        pygame.draw.polygon(window, (120, 80, 40), [
+                            (bx - 30, by - 15), (bx, by - 35), (bx + 30, by - 15)
+                        ])  # Roof
+                        pygame.draw.circle(window, (255, 200, 50), (bx, by - 5), 8)  # Light/sign
+                    elif building[3] == "warehouse":
+                        # Warehouse = big storage building
+                        pygame.draw.rect(window, (120, 120, 130), (bx - 35, by - 20, 70, 40))  # Building
+                        pygame.draw.rect(window, (100, 100, 110), (bx - 30, by - 10, 25, 30))  # Door1
+                        pygame.draw.rect(window, (100, 100, 110), (bx + 5, by - 10, 25, 30))  # Door2
+                    elif building[3] == "farm":
+                        # Farm = field with crops
+                        pygame.draw.rect(window, (80, 50, 30), (bx - 25, by - 15, 50, 30))  # Field
+                        for i in range(-20, 25, 10):
+                            pygame.draw.line(window, (100, 200, 50), (bx + i, by - 10), (bx + i, by + 10), 2)  # Crops
+                    elif building[3] == "bank":
+                        # Bank = fancy building with columns
+                        pygame.draw.rect(window, (200, 180, 150), (bx - 25, by - 15, 50, 30))  # Building
+                        pygame.draw.rect(window, (180, 160, 130), (bx - 30, by - 25, 60, 10))  # Roof top
+                        pygame.draw.line(window, (160, 140, 110), (bx - 20, by - 15), (bx - 20, by + 15), 4)  # Column
+                        pygame.draw.line(window, (160, 140, 110), (bx + 20, by - 15), (bx + 20, by + 15), 4)  # Column
+                        pygame.draw.circle(window, (255, 215, 0), (bx, by - 5), 8)  # Gold coin symbol
+                    elif building[3] == "factory":
+                        # Robot Factory
+                        pygame.draw.rect(window, (80, 80, 90), (bx - 25, by - 20, 50, 40))
+                        pygame.draw.rect(window, (100, 100, 110), (bx - 10, by - 35, 20, 15))  # Smokestack
+                        pygame.draw.circle(window, (150, 150, 150), (bx, by), 12)  # Robot symbol
 
             # Draw materials to collect!
             for mat in planet_materials:
                 mx, my = int(mat[0]), int(mat[1])
                 if mat[2] == "crystal":
-                    # Crystal = blue diamond
+                    # Crystal = blue diamond (gives gold!)
                     pygame.draw.polygon(window, (100, 200, 255), [
                         (mx, my - 15), (mx + 10, my), (mx, my + 15), (mx - 10, my)
                     ])
+                    pygame.draw.polygon(window, (150, 230, 255), [
+                        (mx, my - 10), (mx + 5, my), (mx, my + 10), (mx - 5, my)
+                    ])
                 elif mat[2] == "metal":
-                    # Metal = gray square
-                    pygame.draw.rect(window, (180, 180, 180), (mx - 10, my - 10, 20, 20))
+                    # Metal = shiny gray (gives iron!)
+                    pygame.draw.rect(window, (180, 180, 190), (mx - 10, my - 10, 20, 20))
+                    pygame.draw.rect(window, (220, 220, 230), (mx - 7, my - 7, 8, 8))  # Shine
+                elif mat[2] == "wood":
+                    # Wood = brown log
+                    pygame.draw.ellipse(window, (120, 70, 30), (mx - 15, my - 8, 30, 16))
+                    pygame.draw.circle(window, (100, 60, 25), (mx - 12, my), 6)  # End
+                    pygame.draw.circle(window, (80, 50, 20), (mx - 12, my), 3)  # Rings
+                elif mat[2] == "stone":
+                    # Stone = gray rock
+                    pygame.draw.polygon(window, (140, 140, 150), [
+                        (mx - 10, my + 8), (mx - 12, my - 5), (mx - 3, my - 12),
+                        (mx + 8, my - 8), (mx + 12, my + 3), (mx + 5, my + 10)
+                    ])
                 else:  # rock
-                    # Rock = brown circle
+                    # Rock = brown circle (gives stone!)
                     pygame.draw.circle(window, (139, 90, 43), (mx, my), 12)
+                    pygame.draw.circle(window, (160, 110, 60), (mx - 3, my - 3), 4)  # Highlight
+
+            # Draw VILLAGERS on this planet!
+            for v in villagers:
+                if v[0] == current_planet_name:
+                    vx, vy = int(v[1]), int(v[2])
+                    job = v[3]
+                    # Different colors for different jobs!
+                    if job == "homeless":
+                        body_color = (150, 150, 150)  # Gray
+                    elif job == "farmer":
+                        body_color = (100, 200, 100)  # Green
+                    elif job == "miner":
+                        body_color = (200, 150, 100)  # Brown
+                    elif job == "soldier":
+                        body_color = (200, 50, 50)  # Red
+                    elif job == "banker":
+                        body_color = (255, 215, 0)  # Gold
+                    elif job == "shopkeeper":
+                        body_color = (200, 100, 200)  # Purple
+                    else:
+                        body_color = (100, 150, 200)  # Blue
+
+                    # Draw little person!
+                    pygame.draw.circle(window, body_color, (vx, vy - 12), 8)  # Head
+                    pygame.draw.line(window, body_color, (vx, vy - 4), (vx, vy + 8), 3)  # Body
+                    pygame.draw.line(window, body_color, (vx - 6, vy + 2), (vx + 6, vy + 2), 2)  # Arms
+                    pygame.draw.line(window, body_color, (vx, vy + 8), (vx - 5, vy + 16), 2)  # Leg
+                    pygame.draw.line(window, body_color, (vx, vy + 8), (vx + 5, vy + 16), 2)  # Leg
 
             # Draw food to collect!
             for fd in planet_food:
@@ -1961,21 +3276,450 @@ async def main():
             planet_title = big_font.render(current_planet_name, True, (255, 255, 255))
             window.blit(planet_title, (20, 20))
 
-            mat_text = font.render("Materials: " + str(materials), True, (200, 200, 100))
-            window.blit(mat_text, (20, 100))
+            # Resources panel on right side
+            res_x = SCREEN_WIDTH - 200
+            res_y = 20
+            pygame.draw.rect(window, (0, 0, 0, 128), (res_x - 10, res_y - 5, 195, 180))
 
-            # Food bar
+            mat_text = font.render("Materials: " + str(materials), True, (200, 200, 100))
+            window.blit(mat_text, (res_x, res_y))
+            wood_text = font.render("Wood: " + str(wood), True, (180, 120, 60))
+            window.blit(wood_text, (res_x, res_y + 25))
+            stone_text = font.render("Stone: " + str(stone), True, (150, 150, 160))
+            window.blit(stone_text, (res_x, res_y + 50))
+            iron_text = font.render("Iron: " + str(iron), True, (200, 200, 210))
+            window.blit(iron_text, (res_x, res_y + 75))
+            gold_text = font.render("Gold: " + str(gold), True, (255, 215, 0))
+            window.blit(gold_text, (res_x, res_y + 100))
+            pop_text = font.render("Population: " + str(population), True, (100, 200, 255))
+            window.blit(pop_text, (res_x, res_y + 125))
+            army_text = font.render("Soldiers: " + str(soldiers), True, (255, 100, 100))
+            window.blit(army_text, (res_x, res_y + 150))
+
+            # Food bar on left
             food_label = font.render("Food:", True, (255, 255, 255))
-            window.blit(food_label, (20, 130))
-            pygame.draw.rect(window, (50, 50, 50), (100, 130, 150, 20))
+            window.blit(food_label, (20, 80))
+            pygame.draw.rect(window, (50, 50, 50), (100, 80, 150, 20))
             food_width = int((food / 100) * 146)
             food_color = (50, 200, 50) if food > 30 else (200, 50, 50)
-            pygame.draw.rect(window, food_color, (102, 132, food_width, 16))
+            pygame.draw.rect(window, food_color, (102, 82, food_width, 16))
 
-            controls1 = font.render("ARROWS = Move   V = Return to space", True, (200, 200, 200))
-            window.blit(controls1, (20, SCREEN_HEIGHT - 60))
-            controls2 = font.render("B = Build Base (" + str(BASE_COST) + ")   T = Build Turret (" + str(TURRET_COST) + ")", True, (200, 200, 200))
-            window.blit(controls2, (20, SCREEN_HEIGHT - 30))
+            # Refugees waiting?
+            if refugees_waiting > 0:
+                ref_text = font.render("Refugees waiting: " + str(refugees_waiting), True, (255, 255, 100))
+                window.blit(ref_text, (20, 110))
+
+            # Count villagers on this planet
+            local_villagers = sum(1 for v in villagers if v[0] == current_planet_name)
+            if local_villagers > 0:
+                local_text = font.render("Villagers here: " + str(local_villagers), True, (150, 200, 255))
+                window.blit(local_text, (20, 140))
+
+            # Planet food supply (economy)
+            if current_planet_name in planet_economy:
+                planet_supply = int(planet_economy[current_planet_name]["food_supply"])
+                supply_color = (100, 255, 100) if planet_supply > 50 else (255, 255, 100) if planet_supply > 20 else (255, 100, 100)
+                supply_text = font.render("Planet Food: " + str(planet_supply) + "/200", True, supply_color)
+                window.blit(supply_text, (20, 170))
+
+                # Show production info
+                farmers_here = sum(1 for v in villagers if v[0] == current_planet_name and v[3] == "farmer")
+                farms_here = sum(1 for b in buildings if b[0] == current_planet_name and b[3] == "farm")
+                if farmers_here > 0 or local_villagers > 0:
+                    prod = min(farmers_here, farms_here * 3) * FOOD_PER_FARMER if farms_here > 0 else 0
+                    consume = local_villagers * FOOD_PER_VILLAGER
+                    net = prod - consume
+                    net_color = (100, 255, 100) if net > 0 else (255, 100, 100) if net < 0 else (200, 200, 200)
+                    net_text = font.render("Food/sec: " + ("+" if net > 0 else "") + str(round(net, 1)), True, net_color)
+                    window.blit(net_text, (20, 195))
+
+            # Building controls at bottom
+            controls1 = font.render("ARROWS = Move   V = Return   ENTER = Enter Building   TAB = Menu", True, (200, 200, 200))
+            window.blit(controls1, (20, SCREEN_HEIGHT - 90))
+            controls2 = font.render("BUILDINGS: B=Base T=Turret F=Farm K=Bank R=Factory Q=House P=Port E=Market X=Barracks", True, (200, 200, 200))
+            window.blit(controls2, (20, SCREEN_HEIGHT - 60))
+            controls3 = font.render("JOBS: 1=Farmer 2=Miner 3=Soldier 4=Banker 5=Shopkeeper 6=Builder", True, (255, 200, 100))
+            window.blit(controls3, (20, SCREEN_HEIGHT - 30))
+
+            # --- BUILDING MENU OVERLAY! ---
+            if building_menu_open:
+                # Dark overlay
+                overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+                overlay.fill((0, 0, 0))
+                overlay.set_alpha(200)
+                window.blit(overlay, (0, 0))
+
+                # Menu box
+                menu_width = 900
+                menu_height = 650
+                menu_x = (SCREEN_WIDTH - menu_width) // 2
+                menu_y = (SCREEN_HEIGHT - menu_height) // 2
+
+                pygame.draw.rect(window, (30, 30, 50), (menu_x, menu_y, menu_width, menu_height))
+                pygame.draw.rect(window, (100, 150, 255), (menu_x, menu_y, menu_width, menu_height), 3)
+
+                # Title
+                menu_title = big_font.render("BUILDING GUIDE", True, (255, 215, 0))
+                title_rect = menu_title.get_rect(center=(SCREEN_WIDTH // 2, menu_y + 40))
+                window.blit(menu_title, title_rect)
+
+                # Building data - [key, name, cost, extra_cost, requirement, description]
+                all_buildings = [
+                    ["B", "BASE", str(BASE_COST) + " mat", "", "None", "Command center! Unlocks advanced buildings."],
+                    ["T", "TURRET", str(TURRET_COST) + " mat", "", "1 free, 3 with Base", "Auto-shoots enemies during battle!"],
+                    ["F", "FARM", str(FARM_COST) + " mat", "", "Base required", "Generates food over time. Needs farmers!"],
+                    ["K", "BANK", str(BANK_COST) + " mat", "", "Base required", "Generates coins over time. Needs bankers!"],
+                    ["R", "ROBOT FACTORY", str(FACTORY_COST) + " mat", "", "Base required", "Spawns helper robots in battle!"],
+                    ["G", "SHIELD GEN", str(SHIELD_GEN_COST) + " mat", "", "Base required", "Gives you a shield when you land!"],
+                    ["M", "AUTO MINER", str(MINER_COST) + " mat", "", "Base required", "Auto-collects materials. Needs miners!"],
+                    ["H", "HOSPITAL", str(HOSPITAL_COST) + " mat", "", "Base required", "Gives extra life when you land!"],
+                    ["D", "RADAR", str(RADAR_COST) + " mat", "", "Base required", "Shows enemy direction warnings!"],
+                    ["Y", "SHIPYARD", str(SHIPYARD_COST) + " mat", "", "Base required", "Upgrades ship damage/speed/fire rate!"],
+                    ["Q", "HOUSE", str(HOUSE_COST) + " mat", str(HOUSE_WOOD) + " wood", "None", "Homes for 4 villagers. Build for refugees!"],
+                    ["P", "SPACE PORT", str(SPACEPORT_COST) + " mat", str(SPACEPORT_IRON) + " iron", "Base required", "Dock your fleet ships here!"],
+                    ["E", "MARKET", str(MARKET_COST) + " mat", str(MARKET_WOOD) + " wood", "None", "Trade goods for coins! Needs shopkeepers!"],
+                    ["X", "BARRACKS", str(BARRACKS_COST) + " mat", str(BARRACKS_IRON) + " iron", "Base required", "Train villagers into soldiers!"],
+                    ["C", "TAVERN", str(TAVERN_COST) + " mat", str(TAVERN_WOOD) + " wood", "None", "Makes villagers happy!"],
+                    ["Z", "WAREHOUSE", str(WAREHOUSE_COST) + " mat", str(WAREHOUSE_WOOD) + " wood", "None", "Stores extra materials!"],
+                ]
+
+                # Job assignments section
+                job_data = [
+                    ["1", "FARMER", "Works at Farm", "Grows food faster!"],
+                    ["2", "MINER", "Works at Auto Miner", "Collects materials faster!"],
+                    ["3", "SOLDIER", "Needs Barracks", "Fights in your army!"],
+                    ["4", "BANKER", "Works at Bank", "Generates more coins!"],
+                    ["5", "SHOPKEEPER", "Works at Market", "Trades for better prices!"],
+                    ["6", "BUILDER", "No building needed", "Builds things faster!"],
+                ]
+
+                # Draw buildings (with scroll)
+                visible_buildings = 8
+                start_y = menu_y + 80
+                row_height = 65
+
+                for i in range(visible_buildings):
+                    idx = i + building_menu_scroll
+                    if idx >= len(all_buildings):
+                        break
+
+                    b = all_buildings[idx]
+                    row_y = start_y + i * row_height
+
+                    # Alternating row colors
+                    row_color = (40, 40, 60) if i % 2 == 0 else (35, 35, 55)
+                    pygame.draw.rect(window, row_color, (menu_x + 10, row_y, menu_width - 20, row_height - 5))
+
+                    # Key
+                    key_text = medium_font.render("[" + b[0] + "]", True, (255, 200, 100))
+                    window.blit(key_text, (menu_x + 20, row_y + 5))
+
+                    # Name
+                    name_text = medium_font.render(b[1], True, (255, 255, 255))
+                    window.blit(name_text, (menu_x + 80, row_y + 5))
+
+                    # Cost
+                    cost_text = font.render(b[2], True, (200, 200, 100))
+                    window.blit(cost_text, (menu_x + 280, row_y + 8))
+
+                    # Extra cost (if any)
+                    if b[3]:
+                        extra_text = font.render("+ " + b[3], True, (200, 150, 100))
+                        window.blit(extra_text, (menu_x + 380, row_y + 8))
+
+                    # Requirement
+                    req_color = (100, 255, 100) if b[4] == "None" else (255, 200, 100)
+                    req_text = font.render(b[4], True, req_color)
+                    window.blit(req_text, (menu_x + 500, row_y + 8))
+
+                    # Description
+                    desc_text = font.render(b[5], True, (180, 180, 180))
+                    window.blit(desc_text, (menu_x + 20, row_y + 35))
+
+                # Scroll indicator
+                if building_menu_scroll > 0:
+                    up_arrow = medium_font.render("^ MORE ABOVE ^", True, (150, 150, 200))
+                    up_rect = up_arrow.get_rect(center=(SCREEN_WIDTH // 2, menu_y + 70))
+                    window.blit(up_arrow, up_rect)
+
+                if building_menu_scroll + visible_buildings < len(all_buildings):
+                    down_arrow = medium_font.render("v MORE BELOW v", True, (150, 150, 200))
+                    down_rect = down_arrow.get_rect(center=(SCREEN_WIDTH // 2, menu_y + menu_height - 70))
+                    window.blit(down_arrow, down_rect)
+
+                # Instructions
+                instr_text = font.render("UP/DOWN = Scroll   TAB/ESC = Close", True, (150, 150, 150))
+                instr_rect = instr_text.get_rect(center=(SCREEN_WIDTH // 2, menu_y + menu_height - 30))
+                window.blit(instr_text, instr_rect)
+
+                # Column headers
+                pygame.draw.line(window, (80, 80, 100), (menu_x + 10, start_y - 5), (menu_x + menu_width - 10, start_y - 5), 2)
+                header_y = start_y - 25
+                h1 = font.render("KEY", True, (150, 150, 200))
+                window.blit(h1, (menu_x + 20, header_y))
+                h2 = font.render("BUILDING", True, (150, 150, 200))
+                window.blit(h2, (menu_x + 80, header_y))
+                h3 = font.render("COST", True, (150, 150, 200))
+                window.blit(h3, (menu_x + 280, header_y))
+                h4 = font.render("EXTRA", True, (150, 150, 200))
+                window.blit(h4, (menu_x + 380, header_y))
+                h5 = font.render("REQUIRES", True, (150, 150, 200))
+                window.blit(h5, (menu_x + 500, header_y))
+
+        # --- DRAW BUILDING INTERIOR! ---
+        if game_state == "inside_building" and inside_building:
+            building_type = inside_building[3]
+
+            # Background color based on building type
+            if building_type == "farm":
+                window.fill((60, 80, 40))  # Earthy green
+            elif building_type == "bank":
+                window.fill((50, 40, 30))  # Rich wood brown
+            elif building_type == "market":
+                window.fill((70, 50, 40))  # Market brown
+            elif building_type == "barracks":
+                window.fill((40, 40, 50))  # Military gray
+            elif building_type == "house":
+                window.fill((60, 50, 45))  # Cozy interior
+            elif building_type == "tavern":
+                window.fill((50, 35, 25))  # Warm tavern
+            elif building_type == "warehouse":
+                window.fill((45, 45, 50))  # Storage gray
+            elif building_type == "hospital":
+                window.fill((60, 70, 80))  # Clean blue
+            else:
+                window.fill((40, 40, 40))
+
+            # Building title
+            title_text = big_font.render(building_type.upper(), True, (255, 255, 255))
+            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 50))
+            window.blit(title_text, title_rect)
+
+            # Different interiors for different buildings!
+            if building_type == "farm":
+                # --- FARM INTERIOR ---
+                # Draw crop plots
+                pygame.draw.rect(window, (80, 60, 30), (100, 150, 200, 150))  # Plot 1
+                pygame.draw.rect(window, (80, 60, 30), (350, 150, 200, 150))  # Plot 2
+                pygame.draw.rect(window, (80, 60, 30), (600, 150, 200, 150))  # Plot 3
+
+                # Draw some crops
+                for px in [150, 200, 250]:
+                    for py in [180, 220, 260]:
+                        pygame.draw.line(window, (50, 150, 50), (px, py), (px, py - 20), 3)
+                        pygame.draw.circle(window, (100, 200, 50), (px, py - 25), 8)
+
+                for px in [400, 450, 500]:
+                    for py in [180, 220, 260]:
+                        pygame.draw.line(window, (50, 150, 50), (px, py), (px, py - 15), 3)
+
+                # Menu options
+                farm_options = ["[1] Plant Crops (10 coins)", "[2] Harvest All (get food)", "[3] Water Crops (+growth)", "[ESC] Leave Farm"]
+                for i, opt in enumerate(farm_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 350 + i * 40))
+
+                # Show current food
+                food_text = font.render("Food: " + str(food), True, (100, 255, 100))
+                window.blit(food_text, (650, 350))
+
+            elif building_type == "bank":
+                # --- BANK INTERIOR ---
+                # Draw vault
+                pygame.draw.rect(window, (80, 80, 90), (SCREEN_WIDTH//2 - 100, 120, 200, 180))
+                pygame.draw.circle(window, (150, 150, 160), (SCREEN_WIDTH//2, 210), 40)
+                pygame.draw.circle(window, (100, 100, 110), (SCREEN_WIDTH//2, 210), 30)
+
+                # Draw counter
+                pygame.draw.rect(window, (120, 80, 40), (100, 350, SCREEN_WIDTH - 200, 40))
+
+                # Draw gold coins
+                for i in range(min(gold, 10)):
+                    pygame.draw.circle(window, (255, 215, 0), (150 + i * 30, 340), 12)
+
+                # Bank balance display
+                balance_text = big_font.render("Bank Balance: " + str(bank_balance), True, (255, 215, 0))
+                balance_rect = balance_text.get_rect(center=(SCREEN_WIDTH // 2, 320))
+                window.blit(balance_text, balance_rect)
+
+                # Menu options
+                bank_options = ["[1] Deposit 100 Coins", "[2] Withdraw 100 Coins", "[3] Collect Interest", "[ESC] Leave Bank"]
+                for i, opt in enumerate(bank_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 420 + i * 40))
+
+                # Show coins
+                coins_text = font.render("Your Coins: " + str(coins), True, (255, 215, 0))
+                window.blit(coins_text, (650, 420))
+
+            elif building_type == "market":
+                # --- MARKET INTERIOR ---
+                # Draw stall
+                pygame.draw.rect(window, (140, 100, 60), (100, 180, SCREEN_WIDTH - 200, 80))
+                pygame.draw.rect(window, (200, 80, 80), (100, 140, SCREEN_WIDTH - 200, 40))
+
+                # Draw goods on counter
+                pygame.draw.rect(window, (139, 90, 43), (150, 190, 40, 30))  # Wood
+                pygame.draw.circle(window, (128, 128, 140), (250, 210), 15)  # Stone
+                pygame.draw.rect(window, (180, 180, 195), (320, 195, 35, 25))  # Iron
+                pygame.draw.circle(window, (255, 215, 0), (430, 205), 12)  # Gold
+
+                # Prices display
+                price_title = medium_font.render("PRICES:", True, (255, 255, 255))
+                window.blit(price_title, (100, 280))
+
+                price_y = 320
+                items = [("Wood", wood, market_prices["wood"]), ("Stone", stone, market_prices["stone"]),
+                        ("Iron", iron, market_prices["iron"]), ("Gold", gold, market_prices["gold"])]
+                for item_name, amount, price in items:
+                    item_text = font.render(item_name + ": " + str(amount) + " (sell for " + str(price) + " coins each)", True, (200, 200, 200))
+                    window.blit(item_text, (120, price_y))
+                    price_y += 25
+
+                # Menu options
+                market_options = ["[1] Sell 10 Wood", "[2] Sell 10 Stone", "[3] Sell 5 Iron", "[4] Sell 1 Gold", "[ESC] Leave Market"]
+                for i, opt in enumerate(market_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 440 + i * 35))
+
+                # Show coins
+                coins_text = font.render("Your Coins: " + str(coins), True, (255, 215, 0))
+                window.blit(coins_text, (650, 280))
+
+            elif building_type == "barracks":
+                # --- BARRACKS INTERIOR ---
+                # Draw training area
+                pygame.draw.rect(window, (60, 50, 40), (100, 150, SCREEN_WIDTH - 200, 200))
+
+                # Draw weapon rack
+                for i in range(5):
+                    pygame.draw.line(window, (150, 150, 160), (150 + i * 80, 180), (150 + i * 80, 280), 5)
+                    pygame.draw.polygon(window, (200, 200, 210), [
+                        (150 + i * 80, 160), (140 + i * 80, 180), (160 + i * 80, 180)
+                    ])
+
+                # Draw some soldier silhouettes
+                for i in range(min(soldiers, 5)):
+                    sx = 550 + i * 40
+                    pygame.draw.circle(window, (100, 80, 60), (sx, 200), 15)
+                    pygame.draw.rect(window, (100, 80, 60), (sx - 12, 215, 24, 40))
+
+                # Stats
+                stats_text = medium_font.render("Army: " + str(soldiers) + " soldiers   Power: " + str(army_power), True, (255, 100, 100))
+                window.blit(stats_text, (100, 370))
+
+                # Menu options
+                barracks_options = ["[1] Train Soldier (1 villager + 50 iron)", "[2] Upgrade Army Power (100 coins)", "[3] Deploy to Defense", "[ESC] Leave Barracks"]
+                for i, opt in enumerate(barracks_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 420 + i * 40))
+
+            elif building_type == "house":
+                # --- HOUSE INTERIOR ---
+                # Draw interior
+                pygame.draw.rect(window, (120, 90, 60), (50, 120, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 200))
+
+                # Draw furniture
+                pygame.draw.rect(window, (80, 60, 40), (100, 200, 120, 60))  # Table
+                pygame.draw.rect(window, (100, 70, 45), (300, 180, 80, 100))  # Bed
+                pygame.draw.rect(window, (140, 100, 60), (500, 200, 60, 80))  # Chair
+
+                # Draw fireplace
+                pygame.draw.rect(window, (60, 60, 70), (650, 160, 100, 120))
+                pygame.draw.polygon(window, (255, 100, 0), [(675, 250), (700, 200), (725, 250)])
+
+                # Count villagers living here
+                house_villagers = sum(1 for v in villagers if v[0] == inside_building[0])
+                house_text = medium_font.render("Villagers on planet: " + str(house_villagers), True, (200, 200, 255))
+                window.blit(house_text, (100, 350))
+
+                # Menu options
+                house_options = ["[1] Rest (restore health)", "[2] Check Happiness", "[ESC] Leave House"]
+                for i, opt in enumerate(house_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 420 + i * 40))
+
+            elif building_type == "tavern":
+                # --- TAVERN INTERIOR ---
+                # Draw bar
+                pygame.draw.rect(window, (100, 60, 30), (100, 300, SCREEN_WIDTH - 200, 50))
+
+                # Draw tables
+                for tx in [150, 350, 550]:
+                    pygame.draw.circle(window, (90, 55, 25), (tx, 200), 40)
+
+                # Draw mugs on bar
+                for i in range(6):
+                    pygame.draw.rect(window, (180, 140, 80), (150 + i * 100, 280, 25, 30))
+
+                # Atmosphere
+                atmo_text = medium_font.render("The tavern is warm and cheerful!", True, (255, 200, 100))
+                window.blit(atmo_text, (100, 380))
+
+                # Menu options
+                tavern_options = ["[1] Buy Drink (5 coins, +happiness)", "[2] Listen to Stories", "[3] Recruit Adventurer", "[ESC] Leave Tavern"]
+                for i, opt in enumerate(tavern_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 440 + i * 40))
+
+            elif building_type == "warehouse":
+                # --- WAREHOUSE INTERIOR ---
+                # Draw shelves
+                for sy in [150, 250, 350]:
+                    pygame.draw.rect(window, (100, 80, 50), (100, sy, SCREEN_WIDTH - 200, 30))
+
+                # Draw crates
+                for cx in [120, 220, 320, 420, 520, 620]:
+                    pygame.draw.rect(window, (140, 100, 60), (cx, 180, 50, 50))
+                    pygame.draw.rect(window, (140, 100, 60), (cx, 280, 50, 50))
+
+                # Show storage
+                storage_text = medium_font.render("STORAGE:", True, (255, 255, 255))
+                window.blit(storage_text, (100, 420))
+
+                storage_info = "Materials: " + str(materials) + "  Wood: " + str(wood) + "  Stone: " + str(stone) + "  Iron: " + str(iron) + "  Gold: " + str(gold)
+                info_text = font.render(storage_info, True, (200, 200, 200))
+                window.blit(info_text, (100, 460))
+
+                # Menu options
+                warehouse_options = ["[1] Organize Storage (+capacity)", "[2] Check Inventory", "[ESC] Leave Warehouse"]
+                for i, opt in enumerate(warehouse_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 520 + i * 40))
+
+            elif building_type == "hospital":
+                # --- HOSPITAL INTERIOR ---
+                # Draw beds
+                for bx in [100, 300, 500]:
+                    pygame.draw.rect(window, (220, 220, 230), (bx, 180, 150, 80))
+                    pygame.draw.rect(window, (180, 200, 220), (bx, 180, 150, 30))
+
+                # Draw medicine cabinet
+                pygame.draw.rect(window, (200, 200, 210), (700, 150, 80, 120))
+                pygame.draw.line(window, (150, 150, 160), (740, 160), (740, 260), 2)
+                pygame.draw.line(window, (150, 150, 160), (700, 210), (780, 210), 2)
+
+                # Red cross
+                pygame.draw.rect(window, (255, 50, 50), (725, 280, 30, 60))
+                pygame.draw.rect(window, (255, 50, 50), (710, 295, 60, 30))
+
+                # Menu options
+                hospital_options = ["[1] Heal Villagers (50 coins)", "[2] Train Medic", "[ESC] Leave Hospital"]
+                for i, opt in enumerate(hospital_options):
+                    color = (255, 255, 100) if i == inside_menu_selection else (200, 200, 200)
+                    opt_text = medium_font.render(opt, True, color)
+                    window.blit(opt_text, (100, 420 + i * 40))
+
+            # Controls hint at bottom
+            controls_text = font.render("UP/DOWN = Select   ENTER = Choose   ESC = Leave", True, (150, 150, 150))
+            window.blit(controls_text, (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT - 40))
 
         # --- DRAW SIGN IN SCREEN! ---
         if game_state == "signin":
@@ -2206,6 +3950,410 @@ async def main():
             instr1_rect = instr1.get_rect(center=(SCREEN_WIDTH // 2, 720))
             window.blit(instr1, instr1_rect)
 
+        # --- DRAW THE LOBBY! ---
+        # The hub between levels where you choose what to do!
+        if game_state == "lobby":
+            # Cool space gradient background!
+            for y in range(SCREEN_HEIGHT):
+                blue = int(10 + (y / SCREEN_HEIGHT) * 30)
+                pygame.draw.line(window, (0, blue // 2, blue), (0, y), (SCREEN_WIDTH, y))
+
+            # Draw some stars!
+            for i in range(50):
+                sx = (i * 127 + title_timer // 10) % SCREEN_WIDTH
+                sy = (i * 89) % SCREEN_HEIGHT
+                brightness = 100 + int(50 * math.sin(title_timer / 500 + i))
+                pygame.draw.circle(window, (brightness, brightness, brightness + 50), (int(sx), int(sy)), 2)
+
+            # Title based on what happened!
+            if lobby_reason == "level":
+                title_text = "LEVEL " + str(level) + " COMPLETE!"
+                title_color = (100, 255, 100)  # Green for victory!
+            else:
+                title_text = "GAME OVER"
+                title_color = (255, 100, 100)  # Red for death!
+
+            lobby_title = big_font.render(title_text, True, title_color)
+            lobby_title_rect = lobby_title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+            window.blit(lobby_title, lobby_title_rect)
+
+            # Show stats!
+            stats_y = 180
+            coins_text = medium_font.render("COINS: " + str(coins), True, (255, 215, 0))
+            coins_rect = coins_text.get_rect(center=(SCREEN_WIDTH // 2, stats_y))
+            window.blit(coins_text, coins_rect)
+
+            level_text = font.render("Level: " + str(level) + "  |  Materials: " + str(materials) + "  |  Food: " + str(food), True, (200, 200, 200))
+            level_rect = level_text.get_rect(center=(SCREEN_WIDTH // 2, stats_y + 40))
+            window.blit(level_text, level_rect)
+
+            # Menu options!
+            # Change quit text if confirmation is needed
+            quit_text = "QUIT TO TITLE"
+            quit_desc = "Return to title screen"
+            quit_color = (150, 150, 150)
+            if quit_confirm and lobby_selection == 3:
+                quit_text = "ARE YOU SURE?"
+                quit_desc = "Press ENTER again to quit, or move away to cancel"
+                quit_color = (255, 100, 100)
+
+            lobby_options = [
+                {"name": "SHOP", "desc": "Buy power-ups and upgrades!", "color": (255, 215, 0)},
+                {"name": "CONTINUE", "desc": "Go back to space exploration!", "color": (100, 200, 255)},
+                {"name": "LEADERBOARD", "desc": "View high scores!", "color": (255, 100, 255)},
+                {"name": quit_text, "desc": quit_desc, "color": quit_color},
+            ]
+
+            menu_y = 300
+            for i in range(len(lobby_options)):
+                opt = lobby_options[i]
+                y_pos = menu_y + i * 80
+
+                # Is this option selected?
+                if i == lobby_selection:
+                    # Glowing box around selected option!
+                    box_width = 500
+                    box_x = (SCREEN_WIDTH - box_width) // 2
+                    pygame.draw.rect(window, opt["color"], (box_x, y_pos - 10, box_width, 60), 3)
+
+                    # Bouncy arrow!
+                    arrow_x = box_x - 40 + int(math.sin(title_timer / 200) * 10)
+                    arrow = medium_font.render(">", True, opt["color"])
+                    window.blit(arrow, (arrow_x, y_pos + 5))
+
+                    text_color = opt["color"]
+                else:
+                    text_color = (100, 100, 100)
+
+                # Option name
+                name_text = medium_font.render(opt["name"], True, text_color)
+                name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, y_pos + 10))
+                window.blit(name_text, name_rect)
+
+                # Description (only for selected)
+                if i == lobby_selection:
+                    desc_text = font.render(opt["desc"], True, (150, 150, 150))
+                    desc_rect = desc_text.get_rect(center=(SCREEN_WIDTH // 2, y_pos + 35))
+                    window.blit(desc_text, desc_rect)
+
+            # Instructions at the bottom!
+            instr_text = font.render("UP/DOWN = Select    ENTER = Choose", True, (150, 150, 150))
+            instr_rect = instr_text.get_rect(center=(SCREEN_WIDTH // 2, 700))
+            window.blit(instr_text, instr_rect)
+
+            # Update animation timer (reusing title_timer)
+            title_timer = title_timer + delta_ms
+
+        # --- DRAW THE SKIN SHOP! ---
+        if game_state == "skin_shop":
+            # Purple gradient background
+            for y in range(SCREEN_HEIGHT):
+                purple = int(20 + (y / SCREEN_HEIGHT) * 40)
+                pygame.draw.line(window, (purple, 0, purple * 2), (0, y), (SCREEN_WIDTH, y))
+
+            # Title
+            skin_title = big_font.render("SKIN SHOP", True, (255, 100, 255))
+            skin_title_rect = skin_title.get_rect(center=(SCREEN_WIDTH // 2, 50))
+            window.blit(skin_title, skin_title_rect)
+
+            # Coins display
+            coins_text = medium_font.render("COINS: " + str(coins), True, (255, 215, 0))
+            window.blit(coins_text, (20, 20))
+
+            # Current skin equipped
+            equip_text = font.render("Equipped: " + current_skin.upper(), True, (100, 255, 100))
+            window.blit(equip_text, (SCREEN_WIDTH - 250, 20))
+
+            # Draw skin cards in a row
+            card_width = 140
+            card_height = 200
+            start_x = (SCREEN_WIDTH - (card_width * 4 + 30 * 3)) // 2  # Center 4 cards
+            cards_per_row = 4
+
+            for i, skin in enumerate(all_skins):
+                row = i // cards_per_row
+                col = i % cards_per_row
+                card_x = start_x + col * (card_width + 30)
+                card_y = 120 + row * (card_height + 20)
+
+                # Card background
+                is_selected = (i == skin_shop_selection)
+                is_owned = skin["name"] in owned_skins
+                is_equipped = skin["name"] == current_skin
+
+                if is_selected:
+                    # Glowing border for selected
+                    pygame.draw.rect(window, (255, 255, 0), (card_x - 4, card_y - 4, card_width + 8, card_height + 8), 4)
+
+                # Card body
+                card_color = (60, 60, 80) if not is_selected else (80, 80, 100)
+                pygame.draw.rect(window, card_color, (card_x, card_y, card_width, card_height))
+                pygame.draw.rect(window, skin["colors"]["body"], (card_x, card_y, card_width, 5))
+
+                # Draw skin preview (ship shape with skin colors)
+                preview_x = card_x + card_width // 2
+                preview_y = card_y + 70
+                body_color = skin["colors"]["body"]
+                accent_color = skin["colors"]["accent"]
+
+                # Ship body
+                pygame.draw.polygon(window, body_color, [
+                    (preview_x, preview_y - 30),
+                    (preview_x - 25, preview_y + 20),
+                    (preview_x + 25, preview_y + 20)
+                ])
+                # Cockpit
+                pygame.draw.ellipse(window, accent_color, (preview_x - 10, preview_y - 15, 20, 25))
+                # Wings
+                pygame.draw.polygon(window, accent_color, [
+                    (preview_x - 20, preview_y + 10),
+                    (preview_x - 40, preview_y + 25),
+                    (preview_x - 15, preview_y + 20)
+                ])
+                pygame.draw.polygon(window, accent_color, [
+                    (preview_x + 20, preview_y + 10),
+                    (preview_x + 40, preview_y + 25),
+                    (preview_x + 15, preview_y + 20)
+                ])
+                # Engine glow
+                pygame.draw.circle(window, (255, 200, 100), (preview_x, preview_y + 25), 8)
+                pygame.draw.circle(window, (255, 255, 200), (preview_x, preview_y + 25), 4)
+
+                # Skin name
+                name_text = font.render(skin["display"], True, (255, 255, 255))
+                name_rect = name_text.get_rect(center=(card_x + card_width // 2, card_y + 130))
+                window.blit(name_text, name_rect)
+
+                # Description
+                desc_text = font.render(skin["desc"], True, (150, 150, 150))
+                desc_rect = desc_text.get_rect(center=(card_x + card_width // 2, card_y + 150))
+                window.blit(desc_text, desc_rect)
+
+                # Price or status
+                if is_equipped:
+                    status_text = font.render("EQUIPPED", True, (100, 255, 100))
+                elif is_owned:
+                    status_text = font.render("OWNED", True, (100, 200, 255))
+                else:
+                    status_text = font.render(str(skin["price"]) + " coins", True, (255, 215, 0))
+                status_rect = status_text.get_rect(center=(card_x + card_width // 2, card_y + 180))
+                window.blit(status_text, status_rect)
+
+            # Instructions
+            instr_text = font.render("LEFT/RIGHT = Browse    ENTER = Buy/Equip    D = Draw Custom    ESC = Back", True, (200, 200, 200))
+            instr_rect = instr_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+            window.blit(instr_text, instr_rect)
+
+        # --- DRAW SKIN EDITOR! ---
+        if game_state == "skin_editor":
+            # Dark background
+            window.fill((30, 20, 40))
+
+            # Title
+            title = big_font.render("DRAW YOUR SKIN!", True, (255, 200, 0))
+            title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
+            window.blit(title, title_rect)
+
+            # Drawing canvas (32x32 pixels, scaled to 256x256)
+            canvas_x = SCREEN_WIDTH // 2 - 128
+            canvas_y = SCREEN_HEIGHT // 2 - 128
+
+            # Draw canvas background (white)
+            pygame.draw.rect(window, (255, 255, 255), (canvas_x, canvas_y, 256, 256))
+
+            # Draw grid lines
+            for i in range(33):
+                pygame.draw.line(window, (200, 200, 200), (canvas_x + i * 8, canvas_y), (canvas_x + i * 8, canvas_y + 256), 1)
+                pygame.draw.line(window, (200, 200, 200), (canvas_x, canvas_y + i * 8), (canvas_x + 256, canvas_y + i * 8), 1)
+
+            # Draw all the pixels!
+            for pixel in custom_skin_pixels:
+                px = canvas_x + pixel[0] * 8
+                py = canvas_y + pixel[1] * 8
+                pygame.draw.rect(window, pixel[2], (px, py, 8, 8))
+
+            # Canvas border
+            pygame.draw.rect(window, (100, 100, 100), (canvas_x - 2, canvas_y - 2, 260, 260), 4)
+
+            # Color palette on the side
+            palette_x = canvas_x + 280
+            palette_y = canvas_y
+            palette_label = font.render("COLORS:", True, (255, 255, 255))
+            window.blit(palette_label, (palette_x, palette_y - 30))
+
+            for i, color in enumerate(drawing_colors):
+                cy = palette_y + i * 22
+                pygame.draw.rect(window, color, (palette_x, cy, 30, 20))
+                pygame.draw.rect(window, (150, 150, 150), (palette_x, cy, 30, 20), 2)
+                # Highlight selected color
+                if i == drawing_color_index:
+                    pygame.draw.rect(window, (255, 255, 0), (palette_x - 3, cy - 3, 36, 26), 3)
+
+            # Current color preview
+            preview_label = font.render("Current:", True, (255, 255, 255))
+            window.blit(preview_label, (palette_x, palette_y + 280))
+            pygame.draw.rect(window, drawing_color, (palette_x, palette_y + 305, 60, 30))
+            pygame.draw.rect(window, (255, 255, 255), (palette_x, palette_y + 305, 60, 30), 2)
+
+            # Preview of character on the left
+            preview_x = canvas_x - 150
+            preview_y = canvas_y + 128
+            preview_label = font.render("PREVIEW:", True, (255, 255, 255))
+            window.blit(preview_label, (preview_x - 30, preview_y - 80))
+
+            # Draw character preview
+            if len(custom_skin_pixels) > 0:
+                for pixel in custom_skin_pixels:
+                    px = preview_x + pixel[0] * 2 - 32
+                    py = preview_y + pixel[1] * 2 - 32
+                    pygame.draw.rect(window, pixel[2], (px, py, 2, 2))
+            else:
+                # Show default rainbow person
+                pygame.draw.ellipse(window, (255, 100, 100), (preview_x - 12, preview_y - 6, 24, 20))
+                pygame.draw.circle(window, (255, 200, 100), (preview_x, preview_y - 18), 12)
+
+            # Instructions
+            instr1 = font.render("Click and drag to draw!", True, (200, 200, 200))
+            instr2 = font.render("LEFT/RIGHT = Change color", True, (200, 200, 200))
+            instr3 = font.render("C = Clear    S = Save & Equip", True, (200, 200, 200))
+            instr4 = font.render("ESC = Back to Skin Shop", True, (200, 200, 200))
+            window.blit(instr1, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 100))
+            window.blit(instr2, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 75))
+            window.blit(instr3, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 50))
+            window.blit(instr4, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 25))
+
+            # Cost info
+            if "custom" in owned_skins:
+                cost_text = font.render("Custom skin OWNED!", True, (0, 255, 0))
+            else:
+                cost_text = font.render("Cost: 100 coins (You have: " + str(coins) + ")", True, (255, 200, 0))
+            window.blit(cost_text, (SCREEN_WIDTH // 2 - 100, 90))
+
+        # --- DRAW STORY ENDING! ---
+        # Epic story ending when you beat level 2000!
+        if game_state == "story_ending":
+            # Dark space background
+            window.fill((5, 5, 20))
+
+            # Draw stars in background
+            for i in range(100):
+                sx = (i * 137 + story_ending_timer // 50) % SCREEN_WIDTH
+                sy = (i * 89) % SCREEN_HEIGHT
+                pygame.draw.circle(window, (255, 255, 255), (sx, sy), 1)
+
+            # Different pages of the story!
+            if story_page == 0:
+                # PAGE 1: Victory!
+                title = big_font.render("YOU DID IT!", True, (255, 215, 0))
+                title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+                window.blit(title, title_rect)
+
+                text1 = medium_font.render("After 2000 levels of battle...", True, (255, 255, 255))
+                text2 = medium_font.render("You have defeated every enemy!", True, (255, 255, 255))
+                text3 = medium_font.render("The Zeldas have been vanquished!", True, (100, 255, 100))
+                window.blit(text1, text1.get_rect(center=(SCREEN_WIDTH // 2, 250)))
+                window.blit(text2, text2.get_rect(center=(SCREEN_WIDTH // 2, 300)))
+                window.blit(text3, text3.get_rect(center=(SCREEN_WIDTH // 2, 350)))
+
+                # Draw hero celebrating!
+                pygame.draw.circle(window, (70, 130, 180), (SCREEN_WIDTH // 2, 500), 40)
+                pygame.draw.ellipse(window, (255, 0, 0), (SCREEN_WIDTH // 2 - 10, 490, 8, 5))
+                pygame.draw.ellipse(window, (255, 0, 0), (SCREEN_WIDTH // 2 + 2, 490, 8, 5))
+
+            elif story_page == 1:
+                # PAGE 2: The Journey
+                title = big_font.render("THE JOURNEY", True, (100, 200, 255))
+                title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+                window.blit(title, title_rect)
+
+                text1 = medium_font.render("From Earth, you explored the galaxy.", True, (255, 255, 255))
+                text2 = medium_font.render("You discovered planets, built bases,", True, (255, 255, 255))
+                text3 = medium_font.render("and made robot friends!", True, (255, 200, 100))
+                text4 = medium_font.render("Total Score: " + str(score), True, (255, 215, 0))
+                window.blit(text1, text1.get_rect(center=(SCREEN_WIDTH // 2, 250)))
+                window.blit(text2, text2.get_rect(center=(SCREEN_WIDTH // 2, 300)))
+                window.blit(text3, text3.get_rect(center=(SCREEN_WIDTH // 2, 350)))
+                window.blit(text4, text4.get_rect(center=(SCREEN_WIDTH // 2, 450)))
+
+                # Draw planets
+                pygame.draw.circle(window, (50, 150, 50), (200, 550), 30)  # Earth
+                pygame.draw.circle(window, (200, 80, 50), (400, 580), 25)  # Mars
+                pygame.draw.circle(window, (150, 200, 255), (600, 550), 28)  # Ice
+                pygame.draw.circle(window, (30, 180, 30), (800, 570), 32)  # Jungle
+                pygame.draw.circle(window, (220, 180, 100), (1000, 560), 26)  # Desert
+
+            elif story_page == 2:
+                # PAGE 3: The Bosses
+                title = big_font.render("EPIC BOSSES DEFEATED", True, (255, 100, 100))
+                title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+                window.blit(title, title_rect)
+
+                bosses = ["Star Destroyer", "Zelda Queen", "Giant Robot",
+                          "Space Dragon", "Dancing 67", "Mega Worm",
+                          "Death Star", "The Bugger", "Dancing Apple"]
+                for i, boss in enumerate(bosses):
+                    row = i // 3
+                    col = i % 3
+                    x = 200 + col * 300
+                    y = 250 + row * 120
+                    boss_text = font.render(boss, True, (255, 200, 100))
+                    window.blit(boss_text, boss_text.get_rect(center=(x, y)))
+                    pygame.draw.circle(window, (0, 255, 0), (x - 80, y), 8)
+
+            elif story_page == 3:
+                # PAGE 4: Peace at last
+                title = big_font.render("PEACE AT LAST", True, (100, 255, 100))
+                title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+                window.blit(title, title_rect)
+
+                text1 = medium_font.render("With the Zeldas gone...", True, (255, 255, 255))
+                text2 = medium_font.render("The galaxy is finally at peace!", True, (255, 255, 255))
+                text3 = medium_font.render("All planets are safe again.", True, (100, 255, 150))
+                text4 = medium_font.render("You are the GREATEST HERO!", True, (255, 215, 0))
+                window.blit(text1, text1.get_rect(center=(SCREEN_WIDTH // 2, 250)))
+                window.blit(text2, text2.get_rect(center=(SCREEN_WIDTH // 2, 300)))
+                window.blit(text3, text3.get_rect(center=(SCREEN_WIDTH // 2, 350)))
+                window.blit(text4, text4.get_rect(center=(SCREEN_WIDTH // 2, 450)))
+
+                # Draw peaceful scene with all planets
+                for i in range(8):
+                    angle = i * 0.785
+                    px = SCREEN_WIDTH // 2 + int(math.cos(angle) * 200)
+                    py = 600 + int(math.sin(angle) * 50)
+                    colors = [(50, 150, 50), (200, 80, 50), (150, 200, 255),
+                              (30, 180, 30), (220, 180, 100), (50, 100, 200),
+                              (180, 50, 30), (180, 180, 180)]
+                    pygame.draw.circle(window, colors[i], (px, py), 20)
+
+            elif story_page == 4:
+                # PAGE 5: Credits / The End
+                title = big_font.render("THE END", True, (255, 255, 255))
+                title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+                window.blit(title, title_rect)
+
+                text1 = medium_font.render("Thank you for playing!", True, (255, 255, 200))
+                text2 = medium_font.render("Created by LEO!", True, (255, 200, 100))
+                text3 = medium_font.render("With help from Claude!", True, (200, 200, 255))
+                text4 = font.render("Final Score: " + str(score), True, (255, 215, 0))
+                text5 = font.render("Levels Completed: 2000", True, (100, 255, 100))
+                window.blit(text1, text1.get_rect(center=(SCREEN_WIDTH // 2, 250)))
+                window.blit(text2, text2.get_rect(center=(SCREEN_WIDTH // 2, 320)))
+                window.blit(text3, text3.get_rect(center=(SCREEN_WIDTH // 2, 370)))
+                window.blit(text4, text4.get_rect(center=(SCREEN_WIDTH // 2, 450)))
+                window.blit(text5, text5.get_rect(center=(SCREEN_WIDTH // 2, 490)))
+
+                # Sparkles
+                for i in range(20):
+                    sx = random.randint(100, SCREEN_WIDTH - 100)
+                    sy = random.randint(550, 700)
+                    pygame.draw.circle(window, (255, 255, 100), (sx, sy), 2)
+
+            # Instructions to continue
+            continue_text = font.render("Press SPACE to continue...", True, (150, 150, 150))
+            window.blit(continue_text, continue_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)))
+
+            story_ending_timer = story_ending_timer + 1
+
         # --- DRAW THE EXPLOSIONS ---
         # Big colorful BOOM when Zeldas get hit!
         for explosion in explosions:
@@ -2279,6 +4427,41 @@ async def main():
                                 for i in range(health):
                                     health_color = (50, 255, 50) if health == 3 else (255, 255, 0) if health == 2 else (255, 50, 50)
                                     pygame.draw.rect(window, health_color, (tx - 10 + (i * 8), ty + 18, 6, 3))
+                        break
+
+            # Draw ROBOT FACTORIES!
+            if building[3] == "factory":
+                for planet in planets:
+                    if planet[2] == building[0]:
+                        px = int(planet[0] - camera_x)
+                        py = int(planet[1] - camera_y)
+                        planet_size = planet[4]
+
+                        if px > -100 and px < SCREEN_WIDTH + 100:
+                            if py > -100 and py < SCREEN_HEIGHT + 100:
+                                fx = px
+                                fy = py - planet_size - 20
+
+                                # Factory building (gray metal building)
+                                pygame.draw.rect(window, (100, 100, 110), (fx - 20, fy - 5, 40, 25))
+                                pygame.draw.rect(window, (80, 80, 90), (fx - 22, fy + 18, 44, 5))
+
+                                # Factory chimney
+                                pygame.draw.rect(window, (70, 70, 80), (fx + 8, fy - 20, 10, 18))
+                                # Smoke puffs!
+                                pygame.draw.circle(window, (150, 150, 150), (fx + 13, fy - 25), 5)
+                                pygame.draw.circle(window, (170, 170, 170), (fx + 15, fy - 32), 4)
+
+                                # Factory windows (glowing)
+                                pygame.draw.rect(window, (0, 200, 255), (fx - 15, fy, 10, 8))
+                                pygame.draw.rect(window, (0, 200, 255), (fx + 5, fy, 10, 8))
+
+                                # Gear symbol on front
+                                pygame.draw.circle(window, (150, 150, 160), (fx, fy + 10), 6)
+                                pygame.draw.circle(window, (80, 80, 90), (fx, fy + 10), 3)
+
+                                # Robot icon above
+                                pygame.draw.circle(window, (200, 0, 0), (fx, fy - 10), 4)
                         break
 
         # --- DRAW HOMING MISSILES! ---
@@ -2584,6 +4767,86 @@ async def main():
                 pygame.draw.line(window, (60, 40, 20), (bx + 55, by + 10), (bx + 75, by + 25), 5)
                 boss_name = "THE BUGGER"
 
+            # === DANCING APPLE ===
+            elif boss_type == "dancing_apple":
+                # This apple GLOWS and DANCES!
+                glow_pulse = abs(math.sin(dance_angle * 4))
+
+                # OUTER GLOW! (rainbow colors that pulse!)
+                glow_colors = [
+                    (255, int(100 + glow_pulse * 155), int(100 + glow_pulse * 155)),
+                    (int(100 + glow_pulse * 155), 255, int(100 + glow_pulse * 155)),
+                    (int(100 + glow_pulse * 155), int(100 + glow_pulse * 155), 255),
+                ]
+                glow_color = glow_colors[int(dance_angle) % 3]
+                pygame.draw.circle(window, glow_color, (int(bx), int(by)), 90)
+                pygame.draw.circle(window, (255, 255, 200), (int(bx), int(by)), 75)
+
+                # APPLE BODY! (big red apple!)
+                apple_red = (220, 30, 30)
+                # Main apple shape (round with slight indent at top)
+                pygame.draw.circle(window, apple_red, (int(bx), int(by + 10)), 60)
+                pygame.draw.circle(window, (200, 20, 20), (int(bx - 25), int(by)), 45)
+                pygame.draw.circle(window, (200, 20, 20), (int(bx + 25), int(by)), 45)
+                # Shiny highlight
+                pygame.draw.circle(window, (255, 150, 150), (int(bx - 20), int(by - 20)), 15)
+                pygame.draw.circle(window, (255, 200, 200), (int(bx - 15), int(by - 25)), 8)
+
+                # STEM! (brown stick on top)
+                pygame.draw.rect(window, (100, 60, 20), (int(bx - 5), int(by - 55), 10, 25))
+                pygame.draw.rect(window, (80, 40, 10), (int(bx - 3), int(by - 55), 6, 25))
+
+                # LEAF! (green leaf on stem)
+                pygame.draw.ellipse(window, (50, 180, 50), (int(bx + 5), int(by - 50), 30, 15))
+                pygame.draw.ellipse(window, (80, 220, 80), (int(bx + 8), int(by - 48), 24, 10))
+
+                # CUTE FACE! (this apple is happy but EVIL!)
+                # Big happy eyes (but with angry eyebrows!)
+                pygame.draw.circle(window, (255, 255, 255), (int(bx - 18), int(by)), 14)
+                pygame.draw.circle(window, (255, 255, 255), (int(bx + 18), int(by)), 14)
+                # Pupils
+                pygame.draw.circle(window, (0, 0, 0), (int(bx - 15), int(by + 2)), 7)
+                pygame.draw.circle(window, (0, 0, 0), (int(bx + 21), int(by + 2)), 7)
+                # Eye sparkle
+                pygame.draw.circle(window, (255, 255, 255), (int(bx - 17), int(by - 2)), 3)
+                pygame.draw.circle(window, (255, 255, 255), (int(bx + 19), int(by - 2)), 3)
+                # EVIL EYEBROWS!
+                pygame.draw.line(window, (0, 0, 0), (int(bx - 30), int(by - 18)), (int(bx - 8), int(by - 12)), 4)
+                pygame.draw.line(window, (0, 0, 0), (int(bx + 30), int(by - 18)), (int(bx + 8), int(by - 12)), 4)
+                # Big happy smile (but creepy!)
+                pygame.draw.arc(window, (0, 0, 0), (int(bx - 25), int(by + 5), 50, 35), 3.3, 6.1, 4)
+                # Teeth!
+                pygame.draw.rect(window, (255, 255, 255), (int(bx - 15), int(by + 18), 10, 8))
+                pygame.draw.rect(window, (255, 255, 255), (int(bx + 5), int(by + 18), 10, 8))
+
+                # DANCING ARMS! (wiggling!)
+                arm_wave = math.sin(dance_angle * 8) * 20
+                # Left arm
+                pygame.draw.line(window, apple_red, (int(bx - 50), int(by + 10)), (int(bx - 80), int(by - 20 + arm_wave)), 10)
+                pygame.draw.circle(window, apple_red, (int(bx - 80), int(by - 20 + arm_wave)), 12)
+                # Right arm
+                pygame.draw.line(window, apple_red, (int(bx + 50), int(by + 10)), (int(bx + 80), int(by - 20 - arm_wave)), 10)
+                pygame.draw.circle(window, apple_red, (int(bx + 80), int(by - 20 - arm_wave)), 12)
+
+                # DANCING LEGS! (kicking!)
+                leg_kick = math.sin(dance_angle * 6) * 15
+                # Left leg
+                pygame.draw.line(window, apple_red, (int(bx - 20), int(by + 55)), (int(bx - 30 + leg_kick), int(by + 90)), 10)
+                pygame.draw.circle(window, (80, 40, 20), (int(bx - 30 + leg_kick), int(by + 90)), 10)
+                # Right leg
+                pygame.draw.line(window, apple_red, (int(bx + 20), int(by + 55)), (int(bx + 30 - leg_kick), int(by + 90)), 10)
+                pygame.draw.circle(window, (80, 40, 20), (int(bx + 30 - leg_kick), int(by + 90)), 10)
+
+                # SPARKLES around the dancing apple!
+                for i in range(8):
+                    sparkle_angle = dance_angle * 2 + i * 0.785
+                    sx = bx + math.cos(sparkle_angle) * 100
+                    sy = by + math.sin(sparkle_angle) * 100
+                    sparkle_size = int(3 + glow_pulse * 5)
+                    pygame.draw.circle(window, (255, 255, 100), (int(sx), int(sy)), sparkle_size)
+
+                boss_name = "DANCING APPLE"
+
             # --- BOSS HEALTH BAR (for all bosses!) ---
             if boss_active:
                 bar_width = 150
@@ -2649,6 +4912,16 @@ async def main():
         # --- DRAW THRAWN ---
         # Only draw Thrawn if the game is NOT over (he exploded!)
         if not game_over:
+            # Get the current skin colors!
+            skin_body = (0, 100, 255)  # Default blue
+            skin_accent = (50, 80, 200)  # Default darker blue
+            skin_name = current_skin
+            for skin in all_skins:
+                if skin["name"] == current_skin:
+                    skin_body = skin["colors"]["body"]
+                    skin_accent = skin["colors"]["accent"]
+                    break
+
             # SHIELD BUBBLE! Draw it behind Thrawn if you have shields!
             if shield_hits > 0:
                 # Glowing blue bubble around Thrawn!
@@ -2658,16 +4931,112 @@ async def main():
                 pygame.draw.circle(window, (100, 150, 255), (int(thrawn_x), int(thrawn_y)), 42, 2)
                 pygame.draw.circle(window, (150, 200, 255), (int(thrawn_x), int(thrawn_y)), 38, 1)
 
-            # Blue triangle spaceship body (3 points make a triangle!)
-            # Point 1: top (nose of ship), Point 2: bottom-left, Point 3: bottom-right
-            pygame.draw.polygon(window, (0, 100, 255), [
-                (thrawn_x, thrawn_y - 30),      # Top point (nose)
-                (thrawn_x - 25, thrawn_y + 20), # Bottom-left
-                (thrawn_x + 25, thrawn_y + 20)  # Bottom-right
+            # Draw different skins - COOL SPACESHIPS!
+            tx = int(thrawn_x)
+            ty = int(thrawn_y)
+
+            # Ship body - main triangle
+            pygame.draw.polygon(window, skin_body, [
+                (tx, ty - 30),
+                (tx - 25, ty + 20),
+                (tx + 25, ty + 20)
             ])
-            # Red glowing eyes!
-            pygame.draw.circle(window, (255, 0, 0), (thrawn_x - 8, thrawn_y), 5)  # Left eye
-            pygame.draw.circle(window, (255, 0, 0), (thrawn_x + 8, thrawn_y), 5)  # Right eye
+
+            # Cockpit (oval in center)
+            pygame.draw.ellipse(window, skin_accent, (tx - 10, ty - 15, 20, 25))
+
+            # Wings!
+            pygame.draw.polygon(window, skin_accent, [
+                (tx - 20, ty + 10),
+                (tx - 40, ty + 25),
+                (tx - 15, ty + 20)
+            ])
+            pygame.draw.polygon(window, skin_accent, [
+                (tx + 20, ty + 10),
+                (tx + 40, ty + 25),
+                (tx + 15, ty + 20)
+            ])
+
+            # Engine glow!
+            pygame.draw.circle(window, (255, 200, 100), (tx, ty + 25), 8)
+            pygame.draw.circle(window, (255, 255, 200), (tx, ty + 25), 4)
+
+            # Special effects for each skin!
+            if skin_name == "thrawn":
+                # Red glowing cockpit windows (eyes!)
+                pygame.draw.ellipse(window, (255, 0, 0), (tx - 8, ty - 8, 6, 4))
+                pygame.draw.ellipse(window, (255, 0, 0), (tx + 2, ty - 8, 6, 4))
+
+            elif skin_name == "ender":
+                # Battle school lights
+                pygame.draw.line(window, (100, 255, 100), (tx - 15, ty + 5), (tx + 15, ty + 5), 2)
+                pygame.draw.circle(window, (255, 215, 0), (tx, ty - 5), 4)  # Command star
+
+            elif skin_name == "robot":
+                # Scanner visor
+                pygame.draw.rect(window, (255, 0, 0), (tx - 8, ty - 10, 16, 4))
+                pygame.draw.circle(window, (0, 200, 255), (tx, ty + 5), 5)  # Reactor
+
+            elif skin_name == "ninja":
+                # Red headband stripe
+                pygame.draw.rect(window, (150, 0, 0), (tx - 20, ty - 5, 40, 4))
+                # Glowing red eyes
+                pygame.draw.circle(window, (255, 0, 0), (tx - 5, ty - 8), 3)
+                pygame.draw.circle(window, (255, 0, 0), (tx + 5, ty - 8), 3)
+
+            elif skin_name == "alien":
+                # Big alien eyes
+                pygame.draw.ellipse(window, (0, 0, 0), (tx - 10, ty - 15, 8, 12))
+                pygame.draw.ellipse(window, (0, 0, 0), (tx + 2, ty - 15, 8, 12))
+                pygame.draw.ellipse(window, (100, 255, 150), (tx - 8, ty - 13, 4, 6))
+                pygame.draw.ellipse(window, (100, 255, 150), (tx + 4, ty - 13, 4, 6))
+                # Antennae!
+                pygame.draw.line(window, skin_accent, (tx - 5, ty - 28), (tx - 12, ty - 40), 2)
+                pygame.draw.line(window, skin_accent, (tx + 5, ty - 28), (tx + 12, ty - 40), 2)
+                pygame.draw.circle(window, (255, 255, 0), (tx - 12, ty - 40), 3)
+                pygame.draw.circle(window, (255, 255, 0), (tx + 12, ty - 40), 3)
+
+            elif skin_name == "fire":
+                # Flame trails!
+                for fx in [-10, 0, 10]:
+                    pygame.draw.polygon(window, (255, 100, 0), [(tx + fx, ty + 20), (tx + fx - 5, ty + 35), (tx + fx + 5, ty + 35)])
+                    pygame.draw.polygon(window, (255, 200, 50), [(tx + fx, ty + 22), (tx + fx - 3, ty + 32), (tx + fx + 3, ty + 32)])
+                # Fiery eyes
+                pygame.draw.circle(window, (255, 255, 0), (tx - 5, ty - 5), 4)
+                pygame.draw.circle(window, (255, 255, 0), (tx + 5, ty - 5), 4)
+
+            elif skin_name == "ice":
+                # Ice crystals on wings
+                pygame.draw.polygon(window, (200, 230, 255), [(tx - 30, ty + 15), (tx - 35, ty + 5), (tx - 25, ty + 10)])
+                pygame.draw.polygon(window, (200, 230, 255), [(tx + 30, ty + 15), (tx + 35, ty + 5), (tx + 25, ty + 10)])
+                # Icy blue eyes
+                pygame.draw.circle(window, (100, 200, 255), (tx - 5, ty - 5), 4)
+                pygame.draw.circle(window, (100, 200, 255), (tx + 5, ty - 5), 4)
+                # Sparkles
+                pygame.draw.circle(window, (255, 255, 255), (tx - 18, ty + 8), 2)
+                pygame.draw.circle(window, (255, 255, 255), (tx + 18, ty + 8), 2)
+
+            elif skin_name == "gold":
+                # Crown on top!
+                pygame.draw.polygon(window, (255, 215, 0), [
+                    (tx - 10, ty - 28), (tx - 8, ty - 38), (tx - 4, ty - 32),
+                    (tx, ty - 42), (tx + 4, ty - 32), (tx + 8, ty - 38), (tx + 10, ty - 28)
+                ])
+                # Jewels!
+                pygame.draw.circle(window, (255, 0, 0), (tx - 4, ty - 35), 2)
+                pygame.draw.circle(window, (0, 100, 255), (tx, ty - 38), 2)
+                pygame.draw.circle(window, (0, 255, 0), (tx + 4, ty - 35), 2)
+                # Sparkles!
+                for sx, sy in [(tx - 22, ty), (tx + 22, ty), (tx - 15, ty + 15), (tx + 15, ty + 15)]:
+                    pygame.draw.circle(window, (255, 255, 200), (sx, sy), 2)
+
+            elif skin_name == "custom":
+                # Custom skin - draw pixels over ship!
+                if len(custom_skin_pixels) > 0:
+                    for pixel in custom_skin_pixels:
+                        px = tx + pixel[0] - 16
+                        py = ty + pixel[1] - 16
+                        pygame.draw.rect(window, pixel[2], (px, py, 2, 2))
 
         # --- DRAW THE WINGMEN ---
         # Your fleet of buddy ships that fight alongside Thrawn!
@@ -2685,6 +5054,36 @@ async def main():
                 # Little white eyes!
                 pygame.draw.circle(window, (255, 255, 255), (wx - 5, wy - 5), 3)
                 pygame.draw.circle(window, (255, 255, 255), (wx + 5, wy - 5), 3)
+
+        # --- DRAW HELPER ROBOTS! ---
+        # Robots from factories that help you fight!
+        if game_state == "playing":
+            for robot in helper_robots:
+                rx = int(robot[0])
+                ry = int(robot[1])
+
+                # Robot body (chrome rectangle)
+                pygame.draw.rect(window, (150, 150, 160), (rx - 12, ry - 15, 24, 30))
+                pygame.draw.rect(window, (180, 180, 190), (rx - 8, ry - 10, 16, 20))
+
+                # Robot head
+                pygame.draw.rect(window, (130, 130, 140), (rx - 8, ry - 25, 16, 12))
+
+                # Robot eyes (blue glowing)
+                pygame.draw.rect(window, (0, 200, 255), (rx - 6, ry - 22, 5, 4))
+                pygame.draw.rect(window, (0, 200, 255), (rx + 1, ry - 22, 5, 4))
+
+                # Antenna
+                pygame.draw.line(window, (100, 100, 110), (rx, ry - 25), (rx, ry - 32), 2)
+                pygame.draw.circle(window, (255, 0, 0), (rx, ry - 32), 3)
+
+                # Robot arms
+                pygame.draw.line(window, (120, 120, 130), (rx - 12, ry - 5), (rx - 20, ry + 5), 4)
+                pygame.draw.line(window, (120, 120, 130), (rx + 12, ry - 5), (rx + 20, ry + 5), 4)
+
+                # Robot jets (flames coming out bottom!)
+                pygame.draw.polygon(window, (255, 150, 0), [(rx - 6, ry + 15), (rx - 8, ry + 25), (rx - 4, ry + 25)])
+                pygame.draw.polygon(window, (255, 150, 0), [(rx + 6, ry + 15), (rx + 4, ry + 25), (rx + 8, ry + 25)])
 
         # --- DRAW LEVEL COMPLETE! ---
         # When you beat the boss, show an awesome message!
