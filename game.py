@@ -2920,85 +2920,83 @@ async def main():
         # Update game over animation
         if game_over:
             game_over_timer = game_over_timer + delta_ms
-            # After showing explosions for a while, allow going back to lobby
-            if game_over_timer > 5000:
-                # Press any key to go to LOBBY!
-                keys = pygame.key.get_pressed()
-                if any(keys):
-                    # Go to LOBBY after dying!
-                    game_state = "lobby"
-                    lobby_selection = 0
-                    lobby_reason = "death"  # We died!
-                    quit_confirm = False  # Reset quit confirmation
+            # After showing explosions for a while, go back to lobby
+            if game_over_timer > 6000:
+                # Auto-restart after 6 seconds (web-friendly!)
+                # Go to LOBBY after dying!
+                game_state = "lobby"
+                lobby_selection = 0
+                lobby_reason = "death"  # We died!
+                quit_confirm = False  # Reset quit confirmation
 
-                    game_over = False
-                    game_over_timer = 0
-                    game_over_explosions = []
+                game_over = False
+                game_over_timer = 0
+                game_over_explosions = []
 
-                    # Reset player stats
-                    score = 0
-                    lives = 3
-                    level = 1
+                # Reset player stats
+                score = 0
+                lives = 3
+                level = 1
 
-                    # Reset Thrawn position
-                    thrawn_x = SCREEN_WIDTH // 2
-                    thrawn_y = SCREEN_HEIGHT // 2
-                    # Center camera on player
-                    camera_x = player_world_x - SCREEN_WIDTH // 2
-                    camera_y = player_world_y - SCREEN_HEIGHT // 2
+                # Reset Thrawn position
+                thrawn_x = SCREEN_WIDTH // 2
+                thrawn_y = SCREEN_HEIGHT // 2
+                # Center camera on player
+                camera_x = player_world_x - SCREEN_WIDTH // 2
+                camera_y = player_world_y - SCREEN_HEIGHT // 2
 
-                    # Clear all enemies and projectiles
-                    lasers = []
-                    zeldas = []
-                    swords = []
-                    boss_lasers = []
-                    explosions = []
+                # Clear all enemies and projectiles
+                lasers = []
+                zeldas = []
+                swords = []
+                boss_lasers = []
+                explosions = []
 
-                    # Reset boss stuff
-                    boss_active = False
-                    boss_x = SCREEN_WIDTH // 2
-                    boss_y = -150
-                    boss_health = 20
-                    boss_max_health = 20
-                    boss_spawn_score = 500
-                    boss_defeated = False
-                    boss_defeated_timer = 0
-                    boss_type = "star_destroyer"  # Start with Star Destroyer!
-                    robot_fist_active = False
-                    robot_fist_y = -100
-                    dragon_fire_timer = 0
-                    dance_angle = 0
+                # Reset boss stuff
+                boss_active = False
+                boss_x = SCREEN_WIDTH // 2
+                boss_y = -150
+                boss_health = 20
+                boss_max_health = 20
+                boss_spawn_score = 500
+                boss_defeated = False
+                boss_defeated_timer = 0
+                boss_type = "star_destroyer"  # Start with Star Destroyer!
+                robot_fist_active = False
+                robot_fist_y = -100
+                dragon_fire_timer = 0
+                dance_angle = 0
 
-                    # Reset difficulty back to normal
-                    zelda_speed = 1.5  # Base speed at 60 FPS
-                    zelda_spawn_rate = 2000
-                    sword_rate = 1500
+                # Reset difficulty back to normal
+                zelda_speed = 1.5  # Base speed at 60 FPS
+                zelda_spawn_rate = 2000
+                sword_rate = 1500
 
-                    # Reset level complete
-                    level_complete = False
-                    level_complete_timer = 0
+                # Reset level complete
+                level_complete = False
+                level_complete_timer = 0
 
-                    # Reset ALL power-ups for next game!
-                    has_shield = False
-                    shield_hits = 0
-                    has_fast_shooting = False
-                    has_big_laser = False
-                    wingmen = []
-                    wingmen_count = 0
-                    big_laser_active = False
-                    big_laser_timer = 0
-                    big_laser_cooldown = 0
-                    shoot_cooldown = 0
+                # Reset ALL power-ups for next game!
+                has_shield = False
+                shield_hits = 0
+                has_fast_shooting = False
+                has_big_laser = False
+                wingmen = []
+                wingmen_count = 0
+                big_laser_active = False
+                big_laser_timer = 0
+                big_laser_cooldown = 0
+                shoot_cooldown = 0
 
-                    # Reset chest power-ups too!
-                    has_spread_shot = False
-                    has_homing_missiles = False
-                    has_piercing_laser = False
-                    has_double_points = False
-                    double_points_timer = 0
-                    homing_missiles = []
-                    chests = []
-                    chest_spawn_timer = 0
+                # Reset chest power-ups too!
+                has_spread_shot = False
+                has_homing_missiles = False
+                has_piercing_laser = False
+                has_double_points = False
+                double_points_timer = 0
+                homing_missiles = []
+                chests = []
+                chest_spawn_timer = 0
 
         # Fill the window with BLACK (like space!)
         window.fill((0, 0, 0))
