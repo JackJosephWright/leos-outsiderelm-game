@@ -127,11 +127,30 @@ window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 # Give our window a name at the top!
 pygame.display.set_caption("In Outsiderelm")
 
-# --- THRAWN THE HERO ---
+# --- THRAWN THE HERO (PLAYER 1) ---
 # Thrawn starts at the bottom center of the screen
 thrawn_x = SCREEN_WIDTH // 2  # Middle of screen
 thrawn_y = SCREEN_HEIGHT // 2  # Middle of screen (so you don't drift!)
 thrawn_speed = 5  # How fast Thrawn moves in pixels per frame at 60 FPS
+
+# --- PLAYER 2! (MULTIPLAYER!) ---
+# Player 2 joins the fight! Uses WASD to move and Q to shoot!
+player2_active = False  # Is Player 2 playing? (Press 2 to join!)
+player2_x = SCREEN_WIDTH // 2 + 100  # Start near Player 1
+player2_y = SCREEN_HEIGHT // 2
+player2_lives = 3  # Player 2 has their own lives!
+player2_lasers = []  # Player 2's lasers!
+player2_shoot_cooldown = 0  # Timer to prevent shooting too fast
+player2_planet_x = SCREEN_WIDTH // 2 + 50  # Player 2's position on planet!
+player2_planet_y = SCREEN_HEIGHT // 2
+
+# --- TRAITOR MODE! ---
+# If you grab the traitor skull, you turn EVIL and fight your friend!
+player2_is_traitor = False  # Did Player 2 become a traitor?
+player1_is_traitor = False  # Did Player 1 become a traitor?
+traitor_powerups = []  # Purple skulls that spawn! [x, y]
+traitor_spawn_timer = 0  # Timer for spawning traitor skulls
+traitor_spawn_rate = 15000  # Spawn a traitor skull every 15 seconds
 
 # --- SKINS! ---
 # Different character skins like Fortnite!
@@ -680,6 +699,9 @@ async def main():
     global ship_damage_level, ship_speed_level, ship_fire_rate_level
     global lobby_selection, lobby_reason, quit_confirm
     global building_menu_open, building_menu_scroll
+    global player2_active, player2_x, player2_y, player2_lives, player2_lasers, player2_shoot_cooldown
+    global player2_is_traitor, player1_is_traitor, traitor_powerups, traitor_spawn_timer
+    global player2_planet_x, player2_planet_y
     global inside_building, inside_menu_selection, farm_crops, bank_balance, market_prices
 
     # Track time for delta calculations
@@ -750,6 +772,14 @@ async def main():
                 if event.key == pygame.K_TAB:
                     game_state = "shop"
                     shop_selection = 0
+                # Press 2 to add PLAYER 2!
+                if event.key == pygame.K_2 and not player2_active:
+                    player2_active = True
+                    player2_x = thrawn_x + 100  # Spawn near Player 1
+                    player2_y = thrawn_y
+                    player2_lives = 3
+                    player2_is_traitor = False
+                    print("PLAYER 2 JOINED THE GAME!")
                 # V key = take shuttle to land on planet!
                 if event.key == pygame.K_v and near_planet is not None:
                     current_planet = near_planet
@@ -1773,19 +1803,43 @@ async def main():
             if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
                 current_speed = current_speed * 1.5  # BOOST!
 
-            # Move Thrawn directly (no drift)
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            # Move Thrawn directly (no drift) - PLAYER 1 uses ARROW KEYS!
+            if keys[pygame.K_LEFT]:
                 thrawn_x = thrawn_x - current_speed
-            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            if keys[pygame.K_RIGHT]:
                 thrawn_x = thrawn_x + current_speed
-            if keys[pygame.K_UP] or keys[pygame.K_w]:
+            if keys[pygame.K_UP]:
                 thrawn_y = thrawn_y - current_speed
-            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            if keys[pygame.K_DOWN]:
                 thrawn_y = thrawn_y + current_speed
 
             # Keep Thrawn on screen
             thrawn_x = max(25, min(SCREEN_WIDTH - 25, thrawn_x))
             thrawn_y = max(30, min(SCREEN_HEIGHT - 20, thrawn_y))
+
+            # --- PLAYER 2 MOVEMENT! ---
+            # Player 2 uses WASD keys!
+            if player2_active and player2_lives > 0:
+                # Move Player 2!
+                if keys[pygame.K_a]:
+                    player2_x = player2_x - current_speed
+                if keys[pygame.K_d]:
+                    player2_x = player2_x + current_speed
+                if keys[pygame.K_w]:
+                    player2_y = player2_y - current_speed
+                if keys[pygame.K_s]:
+                    player2_y = player2_y + current_speed
+
+                # Keep Player 2 on screen
+                player2_x = max(25, min(SCREEN_WIDTH - 25, player2_x))
+                player2_y = max(30, min(SCREEN_HEIGHT - 20, player2_y))
+
+                # Player 2 shooting! Press Q to shoot!
+                player2_shoot_cooldown = player2_shoot_cooldown - delta_ms
+                if keys[pygame.K_q] and player2_shoot_cooldown <= 0:
+                    # Shoot a laser from Player 2!
+                    player2_lasers.append([player2_x, player2_y - 30])
+                    player2_shoot_cooldown = normal_shoot_rate
 
             # Also update world position (for planet discovery) - VERY slow scrolling
             # Planets move slowly and stay in view longer!
@@ -1824,64 +1878,93 @@ async def main():
             keys = pygame.key.get_pressed()
             move_speed = 5 * dt
 
-            # Move around the planet surface!
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            # PLAYER 1 moves with ARROW KEYS on planet!
+            if keys[pygame.K_LEFT]:
                 planet_explore_x = planet_explore_x - move_speed
-            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            if keys[pygame.K_RIGHT]:
                 planet_explore_x = planet_explore_x + move_speed
-            if keys[pygame.K_UP] or keys[pygame.K_w]:
+            if keys[pygame.K_UP]:
                 planet_explore_y = planet_explore_y - move_speed
-            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            if keys[pygame.K_DOWN]:
                 planet_explore_y = planet_explore_y + move_speed
 
-            # Keep on screen
+            # Keep Player 1 on screen
             planet_explore_x = max(30, min(SCREEN_WIDTH - 30, planet_explore_x))
             planet_explore_y = max(30, min(SCREEN_HEIGHT - 30, planet_explore_y))
 
-            # Collect materials!
+            # PLAYER 2 moves with WASD on planet!
+            if player2_active and player2_lives > 0:
+                if keys[pygame.K_a]:
+                    player2_planet_x = player2_planet_x - move_speed
+                if keys[pygame.K_d]:
+                    player2_planet_x = player2_planet_x + move_speed
+                if keys[pygame.K_w]:
+                    player2_planet_y = player2_planet_y - move_speed
+                if keys[pygame.K_s]:
+                    player2_planet_y = player2_planet_y + move_speed
+
+                # Keep Player 2 on screen
+                player2_planet_x = max(30, min(SCREEN_WIDTH - 30, player2_planet_x))
+                player2_planet_y = max(30, min(SCREEN_HEIGHT - 30, player2_planet_y))
+
+            # Collect materials! (Both players can collect!)
             materials_to_remove = []
             for mat in planet_materials:
-                dist = ((planet_explore_x - mat[0]) ** 2 + (planet_explore_y - mat[1]) ** 2) ** 0.5
-                if dist < 40:  # Close enough to collect!
+                # Check Player 1
+                dist1 = ((planet_explore_x - mat[0]) ** 2 + (planet_explore_y - mat[1]) ** 2) ** 0.5
+                # Check Player 2
+                dist2 = 9999
+                if player2_active and player2_lives > 0:
+                    dist2 = ((player2_planet_x - mat[0]) ** 2 + (player2_planet_y - mat[1]) ** 2) ** 0.5
+
+                if dist1 < 40 or dist2 < 40:  # Either player close enough!
                     materials_to_remove.append(mat)
+                    collector = "P1" if dist1 < dist2 else "P2"
                     # Different materials give different resources!
                     if mat[2] == "crystal":
                         materials = materials + 5
                         gold = gold + 1  # Crystals contain gold!
-                        print("Collected crystal! Materials: " + str(materials) + " Gold: " + str(gold))
+                        print(collector + " collected crystal! Materials: " + str(materials) + " Gold: " + str(gold))
                     elif mat[2] == "metal":
                         materials = materials + 3
                         iron = iron + 2  # Metal = iron!
-                        print("Collected metal! Materials: " + str(materials) + " Iron: " + str(iron))
+                        print(collector + " collected metal! Materials: " + str(materials) + " Iron: " + str(iron))
                     elif mat[2] == "wood":
                         materials = materials + 2
                         wood = wood + 3  # Wood for building!
-                        print("Collected wood! Wood: " + str(wood))
+                        print(collector + " collected wood! Wood: " + str(wood))
                     elif mat[2] == "stone":
                         materials = materials + 2
                         stone = stone + 2  # Stone for strong buildings!
-                        print("Collected stone! Stone: " + str(stone))
+                        print(collector + " collected stone! Stone: " + str(stone))
                     else:  # rock
                         materials = materials + 1
                         stone = stone + 1  # Rocks give stone too!
-                        print("Collected rock! Materials: " + str(materials))
+                        print(collector + " collected rock! Materials: " + str(materials))
 
             for mat in materials_to_remove:
                 planet_materials.remove(mat)
 
-            # Collect food!
+            # Collect food! (Both players can collect!)
             food_to_remove = []
             for fd in planet_food:
-                dist = ((planet_explore_x - fd[0]) ** 2 + (planet_explore_y - fd[1]) ** 2) ** 0.5
-                if dist < 40:  # Close enough to collect!
+                # Check Player 1
+                dist1 = ((planet_explore_x - fd[0]) ** 2 + (planet_explore_y - fd[1]) ** 2) ** 0.5
+                # Check Player 2
+                dist2 = 9999
+                if player2_active and player2_lives > 0:
+                    dist2 = ((player2_planet_x - fd[0]) ** 2 + (player2_planet_y - fd[1]) ** 2) ** 0.5
+
+                if dist1 < 40 or dist2 < 40:  # Either player close enough!
                     food_to_remove.append(fd)
+                    collector = "P1" if dist1 < dist2 else "P2"
                     if fd[2] == "apple":
                         food = min(100, food + 15)
                     elif fd[2] == "meat":
                         food = min(100, food + 25)
                     else:  # berry
                         food = min(100, food + 10)
-                    print("Ate " + fd[2] + "! Food: " + str(int(food)))
+                    print(collector + " ate " + fd[2] + "! Food: " + str(int(food)))
 
             for fd in food_to_remove:
                 planet_food.remove(fd)
@@ -1996,6 +2079,66 @@ async def main():
             if laser[1] > 0:  # If laser is still visible
                 lasers_to_keep.append(laser)  # Keep it!
         lasers = lasers_to_keep  # Replace old list with new list
+
+        # --- MOVE PLAYER 2 LASERS! ---
+        # Player 2's lasers also fly up (or toward Player 1 if traitor!)
+        for laser in player2_lasers:
+            if player2_is_traitor:
+                # Traitor lasers fly DOWN to hit Player 1!
+                laser[1] = laser[1] + laser_speed * dt
+            else:
+                # Friendly lasers fly UP to hit Zeldas!
+                laser[1] = laser[1] - laser_speed * dt
+
+        # Remove Player 2 lasers that flew off screen
+        p2_lasers_to_keep = []
+        for laser in player2_lasers:
+            if laser[1] > -20 and laser[1] < SCREEN_HEIGHT + 20:
+                p2_lasers_to_keep.append(laser)
+        player2_lasers = p2_lasers_to_keep
+
+        # --- SPAWN TRAITOR POWERUPS! ---
+        # Purple skulls that turn you EVIL!
+        if player2_active and not game_over and game_state == "playing":
+            traitor_spawn_timer = traitor_spawn_timer + delta_ms
+            if traitor_spawn_timer >= traitor_spawn_rate:
+                # Spawn a traitor skull!
+                skull_x = random.randint(100, SCREEN_WIDTH - 100)
+                skull_y = -30  # Start above screen
+                traitor_powerups.append([skull_x, skull_y])
+                traitor_spawn_timer = 0
+                print("TRAITOR SKULL APPEARED!")
+
+        # Move traitor skulls down the screen
+        for skull in traitor_powerups:
+            skull[1] = skull[1] + 2 * dt  # Slow drift down
+
+        # Remove skulls that went off screen
+        skulls_to_keep = []
+        for skull in traitor_powerups:
+            if skull[1] < SCREEN_HEIGHT + 50:
+                skulls_to_keep.append(skull)
+        traitor_powerups = skulls_to_keep
+
+        # --- CHECK IF PLAYER GRABS TRAITOR SKULL! ---
+        skulls_to_remove = []
+        for skull in traitor_powerups:
+            # Check Player 1
+            dist1 = ((thrawn_x - skull[0]) ** 2 + (thrawn_y - skull[1]) ** 2) ** 0.5
+            if dist1 < 40 and not player1_is_traitor:
+                player1_is_traitor = True
+                skulls_to_remove.append(skull)
+                print("PLAYER 1 BECAME A TRAITOR!")
+            # Check Player 2
+            if player2_active and player2_lives > 0:
+                dist2 = ((player2_x - skull[0]) ** 2 + (player2_y - skull[1]) ** 2) ** 0.5
+                if dist2 < 40 and not player2_is_traitor:
+                    player2_is_traitor = True
+                    skulls_to_remove.append(skull)
+                    print("PLAYER 2 BECAME A TRAITOR!")
+        for skull in skulls_to_remove:
+            if skull in traitor_powerups:
+                traitor_powerups.remove(skull)
 
         # --- SPAWN ANGRY ZELDAS ---
         # The timer counts up, and when it's big enough, a new Zelda appears!
@@ -2323,36 +2466,47 @@ async def main():
         chests = chests_to_keep
 
         # --- COLLECT CHESTS! ---
-        # Check if Thrawn touches a chest!
+        # Check if Player 1 OR Player 2 touches a chest!
         chests_to_remove = []
         for chest in chests:
-            distance_x = abs(chest[0] - thrawn_x)
-            distance_y = abs(chest[1] - thrawn_y)
-            if distance_x < 40 and distance_y < 40:
+            # Check Player 1
+            p1_dist_x = abs(chest[0] - thrawn_x)
+            p1_dist_y = abs(chest[1] - thrawn_y)
+            p1_touches = p1_dist_x < 40 and p1_dist_y < 40
+
+            # Check Player 2
+            p2_touches = False
+            if player2_active and player2_lives > 0:
+                p2_dist_x = abs(chest[0] - player2_x)
+                p2_dist_y = abs(chest[1] - player2_y)
+                p2_touches = p2_dist_x < 40 and p2_dist_y < 40
+
+            if p1_touches or p2_touches:
                 chests_to_remove.append(chest)
+                collector = "P1" if p1_touches else "P2"
                 # Apply the power-up based on chest type!
                 loot = chest[2]
                 if loot == "spread_shot":
                     has_spread_shot = True
-                    print("GOT SPREAD SHOT! Shoot 3 lasers at once!")
+                    print(collector + " GOT SPREAD SHOT! Shoot 3 lasers at once!")
                 elif loot == "homing_missiles":
                     has_homing_missiles = True
-                    print("GOT HOMING MISSILES! They track enemies!")
+                    print(collector + " GOT HOMING MISSILES! They track enemies!")
                 elif loot == "piercing_laser":
                     has_piercing_laser = True
-                    print("GOT PIERCING LASER! Goes through enemies!")
+                    print(collector + " GOT PIERCING LASER! Goes through enemies!")
                 elif loot == "double_points":
                     has_double_points = True
                     double_points_timer = 10000  # 10 seconds of double points!
-                    print("GOT DOUBLE POINTS! 2x score for 10 seconds!")
+                    print(collector + " GOT DOUBLE POINTS! 2x score for 10 seconds!")
                 elif loot == "extra_shield":
                     shield_hits = shield_hits + 1
                     has_shield = True
-                    print("GOT EXTRA SHIELD! Now have " + str(shield_hits) + " shields!")
+                    print(collector + " GOT EXTRA SHIELD! Now have " + str(shield_hits) + " shields!")
                 elif loot == "coin_bonus":
                     bonus = random.randint(50, 150)
                     coins = coins + bonus
-                    print("GOT " + str(bonus) + " BONUS COINS!")
+                    print(collector + " GOT " + str(bonus) + " BONUS COINS!")
                 # Create a sparkle explosion!
                 explosions.append([chest[0], chest[1], 400])
 
@@ -2661,6 +2815,67 @@ async def main():
             if missile in homing_missiles:
                 homing_missiles.remove(missile)
 
+        # --- PLAYER 2 LASERS HIT ZELDAS! ---
+        # If Player 2 is NOT a traitor, their lasers hit Zeldas!
+        p2_lasers_to_remove = []
+        if player2_active and not player2_is_traitor:
+            for laser in player2_lasers:
+                for zelda in zeldas:
+                    distance_x = abs(laser[0] - zelda[0])
+                    distance_y = abs(laser[1] - zelda[1])
+                    if distance_x < 30 and distance_y < 30:
+                        p2_lasers_to_remove.append(laser)
+                        if zelda not in zeldas_to_remove:
+                            zeldas_to_remove.append(zelda)
+                        explosions.append([zelda[0], zelda[1], 500])
+                        points = 100
+                        if has_double_points:
+                            points = 200
+                        score = score + points
+
+        # Remove Player 2's lasers that hit
+        for laser in p2_lasers_to_remove:
+            if laser in player2_lasers:
+                player2_lasers.remove(laser)
+
+        # --- TRAITOR ATTACKS! ---
+        # If Player 1 is a traitor, their lasers hit Player 2!
+        if player1_is_traitor and player2_active and player2_lives > 0:
+            for laser in lasers:
+                distance_x = abs(laser[0] - player2_x)
+                distance_y = abs(laser[1] - player2_y)
+                if distance_x < 30 and distance_y < 30:
+                    if laser in lasers:
+                        lasers.remove(laser)
+                    # Hit Player 2!
+                    player2_lives = player2_lives - 1
+                    explosions.append([player2_x, player2_y, 500])
+                    print("TRAITOR P1 hit P2! P2 lives: " + str(player2_lives))
+                    if player2_lives <= 0:
+                        print("PLAYER 2 DEFEATED BY TRAITOR!")
+
+        # If Player 2 is a traitor, their lasers hit Player 1!
+        if player2_is_traitor and not game_over:
+            for laser in player2_lasers:
+                distance_x = abs(laser[0] - thrawn_x)
+                distance_y = abs(laser[1] - thrawn_y)
+                if distance_x < 30 and distance_y < 30:
+                    if laser in player2_lasers:
+                        player2_lasers.remove(laser)
+                    # Check for shield first!
+                    if shield_hits > 0:
+                        shield_hits = shield_hits - 1
+                        explosions.append([thrawn_x, thrawn_y, 300])
+                        print("TRAITOR P2 hit P1 SHIELD! Shields: " + str(shield_hits))
+                    else:
+                        # Hit Player 1!
+                        lives = lives - 1
+                        explosions.append([thrawn_x, thrawn_y, 500])
+                        print("TRAITOR P2 hit P1! P1 lives: " + str(lives))
+                        if lives <= 0:
+                            game_over = True
+                            print("PLAYER 1 DEFEATED BY TRAITOR!")
+
         # Remove the lasers and Zeldas that collided
         for laser in lasers_to_remove:
             if laser in lasers:
@@ -2786,6 +3001,7 @@ async def main():
 
         # --- ZELDA HITS PLAYER? OUCH! ---
         # Check if any Zelda crashed into player (astronaut or ship)!
+        # TRAITORS are friends with Zeldas - they don't get attacked!
         for zelda in zeldas:
             # Use astronaut position when on planet, ship position in space!
             if on_planet:
@@ -2797,23 +3013,39 @@ async def main():
                 player_hit_y = thrawn_y
                 hit_range = 40  # Normal hitbox for ship
 
-            distance_x = abs(zelda[0] - player_hit_x)
-            distance_y = abs(zelda[1] - player_hit_y)
+            # CHECK PLAYER 1 (only if NOT a traitor!)
+            if not player1_is_traitor:
+                distance_x = abs(zelda[0] - player_hit_x)
+                distance_y = abs(zelda[1] - player_hit_y)
 
-            # If Zelda is close to player = OUCH!
-            if distance_x < hit_range and distance_y < hit_range:
-                zeldas.remove(zelda)  # Remove the Zelda
-                # SHIELD CHECK! Does the shield block it?
-                if shield_hits > 0:
-                    shield_hits = shield_hits - 1  # Shield takes the hit!
-                    print("Shield blocked! " + str(shield_hits) + " shields left!")
-                else:
-                    lives = lives - 1  # No shield? Lose a life!
-                # Make an explosion where player got hit!
-                explosions.append([int(player_hit_x), int(player_hit_y), 300])
+                # If Zelda is close to player = OUCH!
+                if distance_x < hit_range and distance_y < hit_range:
+                    zeldas.remove(zelda)  # Remove the Zelda
+                    # SHIELD CHECK! Does the shield block it?
+                    if shield_hits > 0:
+                        shield_hits = shield_hits - 1  # Shield takes the hit!
+                        print("Shield blocked! " + str(shield_hits) + " shields left!")
+                    else:
+                        lives = lives - 1  # No shield? Lose a life!
+                    # Make an explosion where player got hit!
+                    explosions.append([int(player_hit_x), int(player_hit_y), 300])
+                    continue  # Zelda is gone, check next one
+
+            # CHECK PLAYER 2 (only if active and NOT a traitor!)
+            if player2_active and player2_lives > 0 and not player2_is_traitor:
+                distance_x = abs(zelda[0] - player2_x)
+                distance_y = abs(zelda[1] - player2_y)
+
+                if distance_x < 40 and distance_y < 40:
+                    if zelda in zeldas:
+                        zeldas.remove(zelda)
+                    player2_lives = player2_lives - 1
+                    explosions.append([int(player2_x), int(player2_y), 300])
+                    print("Zelda hit P2! P2 lives: " + str(player2_lives))
 
         # --- SWORD HITS PLAYER? OUCH! ---
         # Check if any sword hit the player (astronaut on planet or ship in space)!
+        # TRAITORS are friends with Zeldas - swords don't hit them!
         swords_to_remove = []
         for sword in swords:
             # Use astronaut position when on planet, ship position in space!
@@ -2828,22 +3060,37 @@ async def main():
                 hit_range_x = 25  # Normal hitbox for ship
                 hit_range_y = 30
 
-            distance_x = abs(sword[0] - player_hit_x)
-            distance_y = abs(sword[1] - player_hit_y)
+            # CHECK PLAYER 1 (only if NOT a traitor!)
+            if not player1_is_traitor:
+                distance_x = abs(sword[0] - player_hit_x)
+                distance_y = abs(sword[1] - player_hit_y)
 
-            # If sword is close to player = HIT!
-            if distance_x < hit_range_x and distance_y < hit_range_y:
-                swords_to_remove.append(sword)  # Remove the sword
-                # SHIELD CHECK! Does the shield block it?
-                if shield_hits > 0:
-                    shield_hits = shield_hits - 1  # Shield takes the hit!
-                    print("Shield blocked! " + str(shield_hits) + " shields left!")
-                else:
-                    lives = lives - 1  # No shield? Lose a life!
-                # Make an explosion where player got hit!
-                explosions.append([int(player_hit_x), int(player_hit_y), 300])
+                # If sword is close to player = HIT!
+                if distance_x < hit_range_x and distance_y < hit_range_y:
+                    swords_to_remove.append(sword)  # Remove the sword
+                    # SHIELD CHECK! Does the shield block it?
+                    if shield_hits > 0:
+                        shield_hits = shield_hits - 1  # Shield takes the hit!
+                        print("Shield blocked! " + str(shield_hits) + " shields left!")
+                    else:
+                        lives = lives - 1  # No shield? Lose a life!
+                    # Make an explosion where player got hit!
+                    explosions.append([int(player_hit_x), int(player_hit_y), 300])
+                    continue  # Sword is gone, check next one
 
-        # Remove swords that hit Thrawn
+            # CHECK PLAYER 2 (only if active and NOT a traitor!)
+            if player2_active and player2_lives > 0 and not player2_is_traitor:
+                distance_x = abs(sword[0] - player2_x)
+                distance_y = abs(sword[1] - player2_y)
+
+                if distance_x < 25 and distance_y < 30:
+                    if sword not in swords_to_remove:
+                        swords_to_remove.append(sword)
+                    player2_lives = player2_lives - 1
+                    explosions.append([int(player2_x), int(player2_y), 300])
+                    print("Sword hit P2! P2 lives: " + str(player2_lives))
+
+        # Remove swords that hit players
         for sword in swords_to_remove:
             if sword in swords:
                 swords.remove(sword)
@@ -3263,12 +3510,31 @@ async def main():
                     pygame.draw.circle(window, (150, 50, 200), (fx + 5, fy), 6)
                     pygame.draw.circle(window, (150, 50, 200), (fx, fy - 6), 6)
 
-            # Draw the player (astronaut!)
+            # Draw PLAYER 1 (astronaut!)
             px, py = int(planet_explore_x), int(planet_explore_y)
-            pygame.draw.circle(window, (0, 100, 200), (px, py), 20)  # Body
+            # P1 color is blue (or red if traitor!)
+            p1_color = (200, 50, 50) if player1_is_traitor else (0, 100, 200)
+            pygame.draw.circle(window, p1_color, (px, py), 20)  # Body
             pygame.draw.circle(window, (200, 200, 255), (px, py - 5), 12)  # Helmet
             pygame.draw.circle(window, (255, 0, 0), (px - 4, py - 5), 3)  # Red eye
             pygame.draw.circle(window, (255, 0, 0), (px + 4, py - 5), 3)  # Red eye
+            # P1 label
+            if player2_active:
+                p1_label = font.render("P1", True, (255, 255, 255))
+                window.blit(p1_label, (px - 10, py - 45))
+
+            # Draw PLAYER 2 (astronaut!) - if active!
+            if player2_active and player2_lives > 0:
+                p2x, p2y = int(player2_planet_x), int(player2_planet_y)
+                # P2 color is orange (or red if traitor!)
+                p2_color = (200, 50, 50) if player2_is_traitor else (255, 150, 0)
+                pygame.draw.circle(window, p2_color, (p2x, p2y), 20)  # Body
+                pygame.draw.circle(window, (255, 220, 180), (p2x, p2y - 5), 12)  # Helmet
+                pygame.draw.circle(window, (0, 255, 255), (p2x - 4, p2y - 5), 3)  # Cyan eye
+                pygame.draw.circle(window, (0, 255, 255), (p2x + 4, p2y - 5), 3)  # Cyan eye
+                # P2 label
+                p2_label = font.render("P2", True, (255, 255, 255))
+                window.blit(p2_label, (p2x - 10, p2y - 45))
 
             # Draw UI
             planet_title = big_font.render(current_planet_name, True, (255, 255, 255))
@@ -3332,7 +3598,10 @@ async def main():
                     window.blit(net_text, (20, 195))
 
             # Building controls at bottom
-            controls1 = font.render("ARROWS = Move   V = Return   ENTER = Enter Building   TAB = Menu", True, (200, 200, 200))
+            if player2_active:
+                controls1 = font.render("P1:ARROWS  P2:WASD  V=Return  ENTER=Building  TAB=Menu", True, (200, 200, 200))
+            else:
+                controls1 = font.render("ARROWS = Move   V = Return   ENTER = Enter Building   TAB = Menu", True, (200, 200, 200))
             window.blit(controls1, (20, SCREEN_HEIGHT - 90))
             controls2 = font.render("BUILDINGS: B=Base T=Turret F=Farm K=Bank R=Factory Q=House P=Port E=Market X=Barracks", True, (200, 200, 200))
             window.blit(controls2, (20, SCREEN_HEIGHT - 60))
@@ -5036,6 +5305,98 @@ async def main():
                         py = ty + pixel[1] - 16
                         pygame.draw.rect(window, pixel[2], (px, py, 2, 2))
 
+        # --- DRAW PLAYER 2! ---
+        # Player 2 is an orange ship (or RED if they're a traitor!)
+        if player2_active and player2_lives > 0 and game_state == "playing":
+            p2x = int(player2_x)
+            p2y = int(player2_y)
+
+            # Pick color based on traitor status!
+            if player2_is_traitor:
+                p2_body = (200, 0, 0)  # EVIL RED!
+                p2_accent = (150, 0, 0)
+            else:
+                p2_body = (255, 150, 0)  # Friendly orange!
+                p2_accent = (200, 100, 0)
+
+            # Ship body - triangle
+            pygame.draw.polygon(window, p2_body, [
+                (p2x, p2y - 30),
+                (p2x - 25, p2y + 20),
+                (p2x + 25, p2y + 20)
+            ])
+
+            # Cockpit
+            pygame.draw.ellipse(window, p2_accent, (p2x - 10, p2y - 15, 20, 25))
+
+            # Wings
+            pygame.draw.polygon(window, p2_accent, [
+                (p2x - 20, p2y + 10),
+                (p2x - 40, p2y + 25),
+                (p2x - 15, p2y + 20)
+            ])
+            pygame.draw.polygon(window, p2_accent, [
+                (p2x + 20, p2y + 10),
+                (p2x + 40, p2y + 25),
+                (p2x + 15, p2y + 20)
+            ])
+
+            # Engine glow
+            pygame.draw.circle(window, (100, 200, 255), (p2x, p2y + 25), 8)
+            pygame.draw.circle(window, (200, 255, 255), (p2x, p2y + 25), 4)
+
+            # Eyes - change based on traitor!
+            if player2_is_traitor:
+                # EVIL red glowing eyes!
+                pygame.draw.ellipse(window, (255, 0, 0), (p2x - 8, p2y - 8, 6, 4))
+                pygame.draw.ellipse(window, (255, 0, 0), (p2x + 2, p2y - 8, 6, 4))
+                # Evil aura!
+                pygame.draw.circle(window, (100, 0, 0), (p2x, p2y), 50, 2)
+            else:
+                # Friendly cyan eyes!
+                pygame.draw.ellipse(window, (0, 255, 255), (p2x - 8, p2y - 8, 6, 4))
+                pygame.draw.ellipse(window, (0, 255, 255), (p2x + 2, p2y - 8, 6, 4))
+
+            # Show "P2" label above Player 2
+            p2_label = font.render("P2", True, (255, 255, 255))
+            window.blit(p2_label, (p2x - 10, p2y - 55))
+
+        # --- DRAW PLAYER 1 LABEL ---
+        # Show "P1" label if multiplayer is active
+        if player2_active and game_state == "playing" and not game_over:
+            # Show P1 traitor status too!
+            if player1_is_traitor:
+                p1_label = font.render("P1 TRAITOR!", True, (255, 0, 0))
+            else:
+                p1_label = font.render("P1", True, (255, 255, 255))
+            window.blit(p1_label, (int(thrawn_x) - 10, int(thrawn_y) - 55))
+
+        # --- DRAW TRAITOR POWERUPS! ---
+        # Purple skulls that turn you EVIL!
+        for skull in traitor_powerups:
+            sx = int(skull[0])
+            sy = int(skull[1])
+            # Purple glowing skull!
+            pygame.draw.circle(window, (100, 0, 150), (sx, sy), 18)  # Outer glow
+            pygame.draw.circle(window, (150, 0, 200), (sx, sy), 15)  # Skull
+            # Eye sockets
+            pygame.draw.circle(window, (0, 0, 0), (sx - 5, sy - 3), 4)
+            pygame.draw.circle(window, (0, 0, 0), (sx + 5, sy - 3), 4)
+            # Nose hole
+            pygame.draw.polygon(window, (0, 0, 0), [(sx, sy + 2), (sx - 2, sy + 6), (sx + 2, sy + 6)])
+            # Teeth!
+            pygame.draw.rect(window, (0, 0, 0), (sx - 6, sy + 8, 12, 5))
+            for tooth_x in range(sx - 5, sx + 6, 4):
+                pygame.draw.rect(window, (150, 0, 200), (tooth_x, sy + 9, 2, 3))
+
+        # --- DRAW PLAYER 2'S LASERS! ---
+        for laser in player2_lasers:
+            # Cyan lasers for Player 2 (or RED if traitor!)
+            if player2_is_traitor:
+                pygame.draw.rect(window, (255, 0, 0), (int(laser[0]) - 3, int(laser[1]), 6, 20))
+            else:
+                pygame.draw.rect(window, (0, 255, 255), (int(laser[0]) - 3, int(laser[1]), 6, 20))
+
         # --- DRAW THE WINGMEN ---
         # Your fleet of buddy ships that fight alongside Thrawn!
         if game_state == "playing":
@@ -5186,6 +5547,24 @@ async def main():
             # Show lives in the top right!
             lives_text = font.render("LIVES: " + str(lives), True, (255, 0, 0))
             window.blit(lives_text, (SCREEN_WIDTH - 120, 10))  # Put it at top-right corner
+
+            # --- PLAYER 2 STATUS! ---
+            # Show Player 2 info or "Press 2 to join"!
+            if player2_active:
+                # Show P2 lives
+                p2_color = (255, 0, 0) if player2_is_traitor else (255, 150, 0)
+                p2_status = "TRAITOR!" if player2_is_traitor else "P2 LIVES: " + str(player2_lives)
+                p2_text = font.render(p2_status, True, p2_color)
+                window.blit(p2_text, (SCREEN_WIDTH - 180, 30))
+            else:
+                # Show "Press 2 to join!"
+                join_text = font.render("Press 2 for Player 2!", True, (150, 150, 150))
+                window.blit(join_text, (SCREEN_WIDTH - 220, 30))
+
+            # Show if Player 1 is a traitor!
+            if player1_is_traitor:
+                p1_traitor_text = font.render("P1: TRAITOR!", True, (255, 0, 0))
+                window.blit(p1_traitor_text, (SCREEN_WIDTH // 2 - 60, 40))
 
             # Show food bar below score!
             food_label = font.render("FOOD:", True, (255, 200, 100))
